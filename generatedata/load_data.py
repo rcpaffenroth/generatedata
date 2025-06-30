@@ -3,8 +3,9 @@ import pathlib
 import generatedata
 import json
 import requests
+import generatedata.config
 
-DATA_URL = 'http://users.wpi.edu/~rcpaffenroth/data/generatedata/1-30-2025/'
+DATA_URL = generatedata.config.DATA_URL
 
 def data_names(local=False) -> list:
     """List the names of the datasets that are available to load.

@@ -1,2 +1,156 @@
 # generatedata
-Various data generation scripts in a standardized format for dynamical systems.
+
+A Python library for generating synthetic datasets in a standardized format for testing and benchmarking machine learning algorithms in dynamical systems settings.
+
+## Overview
+
+This library provides a collection of synthetic datasets that represent start-target pairs for dynamical systems research. Each dataset consists of "start" points (often noisy or perturbed data) and "target" points (clean data lying on the manifold of interest). This format is particularly useful for:
+
+- Testing trajectory-based machine learning algorithms
+- Benchmarking denoising methods
+- Evaluating manifold learning techniques
+- Dynamical systems modeling and analysis
+
+## Available Datasets
+
+The library includes the following synthetic datasets:
+
+### 2D Geometric Datasets
+- **`regression_line`**: Noisy points projected onto a line (1000 points)
+- **`pca_line`**: Points scattered around a line in 2D space (1000 points)  
+- **`circle`**: Points near a unit circle with radial noise (1000 points)
+- **`regression_circle`**: Points on a circle with added y-axis noise (1000 points)
+
+### Higher-Dimensional Datasets
+- **`manifold`**: 3D manifold data (1000 points)
+- **`MNIST1D`**: 1D MNIST-like data with 40 features + 10 labels (4000 points)
+- **`MNIST`**: Standard MNIST digits with 784 features + 10 labels (1000 points)
+
+### Real-World Datasets
+- **`EMlocalization`**: Electromagnetic localization data with 160 features + 1 label (3260 points)
+- **`LunarLander`**: Lunar Lander game data with 404 features + 4 actions (4069 points)
+- **`MassSpec`**: Mass spectrometry data with 921 features + 512 labels (572 points)
+
+## Installation
+
+### Using Poetry (Recommended)
+```bash
+git clone <repository-url>
+cd generatedata
+poetry install
+```
+
+### Using pip
+```bash
+git clone <repository-url>
+cd generatedata
+pip install -e .
+```
+
+## Usage
+
+### Loading Data
+
+```python
+from generatedata import load_data
+
+# List available datasets
+datasets = load_data.data_names()
+print(datasets)
+
+# Load a specific dataset
+data = load_data.load_data('MNIST')
+start_points = data['start']  # Noisy/perturbed data
+target_points = data['target']  # Clean data on manifold
+info = data['info']  # Dataset metadata
+```
+
+### Using with PyTorch
+
+```python
+from generatedata import load_data
+from generatedata.StartTargetData import StartTargetData
+from generatedata.df_to_tensor import df_to_tensor
+import torch
+
+# Load data
+data = load_data.load_data('circle')
+z_start = df_to_tensor(data['start'])
+z_target = df_to_tensor(data['target'])
+
+# Create PyTorch dataset
+dataset = StartTargetData(z_start, z_target)
+dataloader = torch.utils.data.DataLoader(dataset, batch_size=32, shuffle=True)
+
+# Use in training loop
+for start_batch, target_batch in dataloader:
+    # Your training code here
+    pass
+```
+
+### Local vs Remote Data
+
+The library supports both local and remote data loading:
+
+```python
+# Load from local files (requires local data generation)
+data = load_data.load_data('MNIST', local=True)
+
+# Load from remote URL (default)
+data = load_data.load_data('MNIST', local=False)
+```
+
+## Data Format
+
+All datasets follow a consistent format:
+
+- **Start points**: Initial/noisy data points
+- **Target points**: Clean data points on the target manifold
+- **Info**: Metadata including:
+  - `num_points`: Number of data points
+  - `size`: Total dimensionality
+  - `x_y_index`: Split index for features/labels (if applicable)
+  - `x_size`: Number of input features
+  - `y_size`: Number of output labels
+
+## Repository Structure
+
+```
+generatedata/
+├── generatedata/           # Main library code
+│   ├── load_data.py       # Data loading functions
+│   ├── save_data.py       # Data saving utilities
+│   ├── StartTargetData.py # PyTorch dataset class
+│   ├── df_to_tensor.py    # DataFrame to tensor conversion
+│   └── config.py          # Configuration settings
+├── scripts/               # Data generation scripts
+├── notebooks/             # Example notebooks
+├── tests/                 # Test suite
+└── data/                  # Generated datasets
+    ├── processed/         # Processed parquet files
+    ├── raw/              # Raw data files
+    └── external/         # External datasets (e.g., MNIST)
+```
+
+## Development
+
+### Running Tests
+```bash
+poetry run pytest
+```
+
+### Generating Data Locally
+```bash
+poetry run python scripts/generatedata_local.py
+```
+
+### Example Notebooks
+See `notebooks/1-rcp-visualize-data.ipynb` for visualization examples and usage patterns.
+
+## License
+
+BSD 3-Clause License
+
+## Author
+
+Randy Paffenroth (rcpaffenroth@wpi.edu)
