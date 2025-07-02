@@ -163,8 +163,14 @@ scripts/copy_data_to_http.sh /path/to/http/dir
 ```
 This will copy all processed data to the specified directory. Ensure you have write permissions and that your web server is configured to serve from this location.
 
+
 ### Example Notebooks
-See `notebooks/1-rcp-visualize-data.ipynb` for visualization examples and usage patterns.
+- `notebooks/1-rcp-visualize-data.ipynb`: Visualization examples and data exploration patterns.
+- `notebooks/2-rcp-scikit-learn.ipynb`: Demonstrates how to use the output of `load_data_as_xy` and `load_data_as_xy_onehot` with scikit-learn RandomForest models for both regression and classification tasks. Includes:
+  - Loading features and targets for regression/classification
+  - Converting one-hot labels to class indices for classification
+  - Training and evaluating RandomForestRegressor and RandomForestClassifier
+  - Example code for integrating generatedata datasets with standard ML workflows
 
 ## License
 
