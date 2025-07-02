@@ -12,6 +12,8 @@ python = "^3.10"
 torch = {version = "2.5.1", source = "pytorch"}
 torchvision = {version = "0.20.*", source = "pytorch"}
 numpy = "2.1.*"
+# the mnist1d creation
+mnist1d = "*"
 # For data
 pandas = "2.2.*"
 pyarrow = "17.*.*"
@@ -21,6 +23,7 @@ plotly = "5.24.*"
 ipykernel = "6.29.*"
 ipympl = "0.9.*"
 jupyterlab = "4.3.*"
+scikit-learn = "1.6.*"
 
 [tool.poetry.group.dev]
 optional = true

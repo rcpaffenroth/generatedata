@@ -63,3 +63,43 @@ def load_data(name: str, local=False, data_dir=None) -> dict:
         z_target = pd.read_parquet(DATA_URL+f'/{name}_target.parquet')
         
     return {'info': data_info, 'start': z_start, 'target': z_target}
+
+def load_data_as_xy(name: str, local=False, data_dir=None) -> tuple:
+    """Load in the dataset with the given name and return it as a tuple of (X, Y).
+    Note, the dataset must define the info json with the keys 'x_y_index', 'x_size', and 'y_size'.
+
+    Args:
+        name (str): the name of the dataset
+
+    Returns:
+        tuple: (X, Y) where X and Y are pandas DataFrames
+    """
+    data = load_data(name, local=local, data_dir=data_dir)
+    info = data['info']
+    if 'x_y_index' not in info or 'x_size' not in info or 'y_size' not in info:
+        raise ValueError(f"Dataset {name} does not have the required keys in info.json: 'x_y_index', 'x_size', 'y_size'.")
+    return data['target'].iloc[:, :info['x_y_index']], data['target'].iloc[:, info['x_y_index']:]
+
+def load_data_as_xy_onehot(name: str, local=False, data_dir=None) -> tuple:
+    """Load in the dataset with the given name and return it as a tuple of (X, Y).
+    Note, the dataset must define the info json with the keys 'x_y_index', 'x_size', 'y_size', and 'onehot_y'. And the 'onehot_y' must be set to True.
+
+    Args:
+        name (str): the name of the dataset
+
+    Returns:
+        tuple: (X, Y) where X and Y are pandas DataFrames
+    """
+    data = load_data(name, local=local, data_dir=data_dir)
+    info = data['info']
+    # Check if the required keys are present in the info.json
+    if 'onehot_y' not in info:
+        raise ValueError(f"Dataset {name} does not have the required key 'onehot_y' in info.json.")
+    if info['onehot_y'] != 1:
+        raise ValueError(f"Dataset {name} does not have 'onehot_y' set to True in info.json.")
+    # Check if the other required keys are present
+    # 'x_y_index', 'x_size', and 'y_size'
+    if 'x_y_index' not in info or 'x_size' not in info or 'y_size' not in info:
+        raise ValueError(f"Dataset {name} does not have the required keys in info.json: 'x_y_index', 'x_size', 'y_size'.")
+    return data['target'].iloc[:, :info['x_y_index']], data['target'].iloc[:, info['x_y_index']:]
+
