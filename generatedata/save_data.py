@@ -32,7 +32,14 @@ def save_data(data_dir, name, start_data, target_data, x_y_index=None):
         data_info['x_size'] = x_y_index
         data_info['y_size'] = size-x_y_index
 
-    with open(data_dir / f'info.json', 'r') as f:
+    # Open or create info.json
+    if not data_dir.exists():
+        data_dir.mkdir(parents=True)
+    info_path = data_dir / f'info.json'
+    if not info_path.exists():
+        with open(info_path, 'w') as f:
+            json.dump({}, f)
+    with open(info_path, 'r') as f:
         info = json.load(f)
 
     if name in info:

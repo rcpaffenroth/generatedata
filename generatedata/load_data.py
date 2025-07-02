@@ -25,7 +25,7 @@ def data_names(local=False) -> list:
         data_info = response.json()
     return list(data_info.keys())
 
-def load_data(name: str, local=False) -> dict:
+def load_data(name: str, local=False, data_dir=None) -> dict:
     """Load in the dataset with the given name.  This functions loads in a variety of datasets created by the
     `scripts/generate-data.py` script.
 
@@ -36,10 +36,14 @@ def load_data(name: str, local=False) -> dict:
         dict: the start and target points of the dataset
     """
     if local:
-        # The directory in which the notebook is located.
-        base_dir = pathlib.Path(generatedata.__path__[0])
-        # The directory where the data is stored.
-        data_dir = base_dir / '../data/processed'
+        # If a data_dir is provided, use it, otherwise use the default data directory
+        if data_dir is not None:
+            data_dir = pathlib.Path(data_dir)
+        else:
+            # The directory in which the notebook is located.
+            base_dir = pathlib.Path(generatedata.__path__[0])
+            # The directory where the data is stored.
+            data_dir = base_dir / '../data/processed'
 
         # load in the info for the datasets
         with open(data_dir / f'info.json', 'r') as f:
