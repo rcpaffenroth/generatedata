@@ -1,12 +1,9 @@
 """
 Unit tests for generatedata.save_data
 """
-import pytest
 import pandas as pd
 import numpy as np
 import torch
-import pathlib
-import os
 from generatedata.save_data import save_data
 
 def test_save_data_creates_files(tmp_path):

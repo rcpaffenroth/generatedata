@@ -3,7 +3,6 @@ Unit tests for the generatedata.load_data module.
 """
 import numpy as np
 import pandas as pd
-import torch
 from generatedata import load_data, save_data
 import pathlib
 

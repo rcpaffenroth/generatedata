@@ -1,9 +1,6 @@
 """
 Unit tests for generatedata.config
 """
-import os
-import tempfile
-import yaml
 from generatedata import config
 
 def test_load_config():
