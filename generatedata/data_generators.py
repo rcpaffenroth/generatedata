@@ -172,7 +172,7 @@ def mnist_save_data(data_dir, name, num_points, mnist_dataset,
         digit_tensors.append(digit_tensor)
     x_on = torch.stack(digit_tensors)
     x_off = torch.stack(digit_tensors)
-    x_off[:, -label_dim:] = 0.1
+    x_off[:, -label_dim:] = 1.0/label_dim
     start_data = {f'x{i}': x_off[:, i] for i in range(x_off.shape[1])}
     target_data = {f'x{i}': x_on[:, i] for i in range(x_on.shape[1])}
     save_data(data_dir, name, start_data, target_data, x_y_index=vector_dim, additional_info=additional_info)
