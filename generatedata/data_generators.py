@@ -182,12 +182,13 @@ def generate_mnist(data_dir: Path, num_points: int = 1000) -> None:
         transforms.ToTensor(),
         transforms.Normalize((0.5,), (0.5,))
     ])
-    mnist_dataset = datasets.MNIST(root=str(data_dir.parent.parent / 'external'), train=True, download=True, transform=transform)
+    mnist_dataset = datasets.MNIST(root=str(data_dir.parent.parent / 'data' / 'external'), train=True, download=True, transform=transform)
     mnist_save_data(data_dir, 'MNIST', num_points, mnist_dataset, vector_dim=28*28)
 
 def generate_mnist_custom(data_dir: Path, num_points: int = 1000,
                           dataset_name = 'MNIST',
-                          degrees=(0,20), translate=(0.0, 0.2), scale=(0.7, 0.9)) -> None:
+                          degrees=(0,0), translate=(0,0), scale=(1,1)) -> None:
+                          # degrees=(0,20), translate=(0.0, 0.2), scale=(0.7, 0.9)) -> None:
     """dataset_name can be 'MNIST', 'EMNIST', 'KMNIST', 'FashionMNIST'"""
     dataset_cls = getattr(datasets, dataset_name)
     transform = transforms.Compose([
@@ -204,9 +205,9 @@ def generate_mnist_custom(data_dir: Path, num_points: int = 1000,
         'scale': scale
     }
     if dataset_name == "EMNIST":
-        mnist_dataset = dataset_cls(root="data/external", train=True, download=True, transform=transform, split="letters")
+        mnist_dataset = dataset_cls(root=str(data_dir.parent.parent / 'data' / 'external'), train=True, download=True, transform=transform, split="letters")
     else:
-        mnist_dataset = dataset_cls(root="data/external", train=True, download=True, transform=transform)
+        mnist_dataset = dataset_cls(root=str(data_dir.parent.parent / 'data' / 'external'), train=True, download=True, transform=transform)
     name = f"{dataset_name}_custom_degrees{degrees[0]}_{degrees[1]}_translate{translate[0]}_{translate[1]}_scale{scale[0]}_{scale[1]}"
     mnist_save_data(data_dir, name, num_points, mnist_dataset, vector_dim=50*50, additional_info=additional_info)
                
