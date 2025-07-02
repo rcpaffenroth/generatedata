@@ -1,0 +1,51 @@
+[tool.poetry]
+name = "generatedata"
+version = "0.1.0"
+description = "Library of code to generate synthetic data for testing and benchmarking machine learning algorithms in a consistent dynamical systems setting."
+authors = ["Randy Paffenroth <rcpaffenroth@wpi.edu>"]
+license = "BSD 3-Clause License"
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.10"
+# For the computational code
+torch = {version = "2.5.1", source = "pytorch"}
+torchvision = {version = "0.20.*", source = "pytorch"}
+numpy = "2.1.*"
+# the mnist1d creation
+mnist1d = "*"
+# For data
+pandas = "2.2.*"
+pyarrow = "17.*.*"
+# For the notebooks and vscode
+matplotlib = "3.9.*"
+plotly = "5.24.*"
+ipykernel = "6.29.*"
+ipympl = "0.9.*"
+jupyterlab = "4.3.*"
+scikit-learn = "1.6.*"
+
+[tool.poetry.group.dev]
+optional = true
+
+[tool.poetry.group.dev.dependencies]
+pytest = "8.3.*"
+pylint = "3.2.*"
+nbmake = "1.5.*"
+jupytext = "1.16.*"
+
+[tool.pytest.ini_options]
+minversion = "6.0"
+addopts = "--nbmake"
+testpaths = [
+    "tests",
+]
+
+[[tool.poetry.source]]
+name = "pytorch"
+url = "https://download.pytorch.org/whl/cu121"
+priority = "explicit"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
