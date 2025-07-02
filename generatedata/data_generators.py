@@ -144,8 +144,7 @@ def mnist1d_save_data(data_dir, name, num_points, mnist1d_dataset,
     start_data = {f'x{i}': x_off[:,i] for i in range(x_off.shape[1])}
     target_data = {f'x{i}': x_on[:,i] for i in range(x_on.shape[1])}
     save_data(data_dir, name, start_data, target_data, 
-                x_y_index=vector_dim, additional_info=additional_info)
-
+                x_y_index=vector_dim, onehot_y=True, additional_info=additional_info)
 def generate_mnist1d(data_dir: Path, num_points: int = 1000) -> None:
     """
     Download and generate the standard MNIST1D dataset.
@@ -216,7 +215,7 @@ def mnist_save_data(data_dir, name, num_points, mnist_dataset,
     x_off[:, -label_dim:] = 1.0/label_dim
     start_data = {f'x{i}': x_off[:, i] for i in range(x_off.shape[1])}
     target_data = {f'x{i}': x_on[:, i] for i in range(x_on.shape[1])}
-    save_data(data_dir, name, start_data, target_data, x_y_index=vector_dim, additional_info=additional_info)
+    save_data(data_dir, name, start_data, target_data, x_y_index=vector_dim, onehot_y=True, additional_info=additional_info)
     
 def generate_mnist(data_dir: Path, num_points: int = 1000) -> None:
     """

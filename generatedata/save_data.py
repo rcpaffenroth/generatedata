@@ -2,7 +2,7 @@ import pandas as pd
 import json
 from pathlib import Path
 
-def save_data(data_dir, name, start_data, target_data, x_y_index=None, additional_info=None):
+def save_data(data_dir, name, start_data, target_data, x_y_index=None, onehot_y=False, additional_info=None):
     """ Save data to parquet files and update info.json.  
 
     The start_data is the start of a trajectory and the target_data is the end of the trajectory.  
@@ -31,6 +31,10 @@ def save_data(data_dir, name, start_data, target_data, x_y_index=None, additiona
         data_info['x_y_index'] = x_y_index
         data_info['x_size'] = x_y_index
         data_info['y_size'] = size-x_y_index
+        if onehot_y:
+            data_info['onehot_y'] = 1
+        else:
+            data_info['onehot_y'] = 0
 
     if additional_info is not None:
         if isinstance(additional_info, dict):
