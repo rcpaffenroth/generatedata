@@ -12,6 +12,8 @@ python = "^3.10"
 torch = {version = "2.5.1", source = "pytorch"}
 torchvision = {version = "0.20.*", source = "pytorch"}
 numpy = "2.1.*"
+# the mnist1d creation
+mnist1d = "*"
 # For data
 pandas = "2.2.*"
 pyarrow = "17.*.*"
