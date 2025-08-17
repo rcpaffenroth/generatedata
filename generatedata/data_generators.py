@@ -183,6 +183,7 @@ def generate_mnist1d_custom(data_dir: Path, num_points: int = 1000,
                 'shear_scale': shear_scale,
                 'shuffle_seq': False,
                 'final_seq_length': 40,
+                'dataset_name': 'MNIST1D',
                 'seed': 42}
     mnist1d_dataset = mnist1d.data.make_dataset(mnist1d.utils.ObjectView(arg_dict))
     name = f'MNIST1Dcustom_scale{scale_coeff}_maxtrans{max_translation}_corrnoise{corr_noise_scale}_iidnoise{iid_noise_scale}_shear{shear_scale}'
