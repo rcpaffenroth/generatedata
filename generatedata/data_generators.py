@@ -1,6 +1,7 @@
 """
 Data generation functions for synthetic and real datasets.
 """
+from itertools import product
 import json
 import numpy as np
 import pandas as pd
@@ -145,6 +146,7 @@ def mnist1d_save_data(data_dir, name, num_points, mnist1d_dataset,
     target_data = {f'x{i}': x_on[:,i] for i in range(x_on.shape[1])}
     save_data(data_dir, name, start_data, target_data, 
                 x_y_index=vector_dim, onehot_y=True, additional_info=additional_info)
+
 def generate_mnist1d(data_dir: Path, num_points: int = 1000) -> None:
     """
     Download and generate the standard MNIST1D dataset.
@@ -154,8 +156,10 @@ def generate_mnist1d(data_dir: Path, num_points: int = 1000) -> None:
     """
     url = 'https://github.com/greydanus/mnist1d/raw/master/mnist1d_data.pkl'
     r = requests.get(url, allow_redirects=True)
+    arg_dict = {'data_family': "MNIST1D"}
     mnist1d_dataset = pickle.loads(r.content)
-    mnist1d_save_data(data_dir, 'MNIST1D', num_points, mnist1d_dataset) 
+    mnist1d_save_data(data_dir, 'MNIST1D', num_points, mnist1d_dataset,
+                      additional_info = arg_dict) 
 
 def generate_mnist1d_custom(data_dir: Path, num_points: int = 1000,
                             scale_coeff=0.4, max_translation=48,
@@ -172,7 +176,8 @@ def generate_mnist1d_custom(data_dir: Path, num_points: int = 1000,
         iid_noise_scale: IID noise scale.
         shear_scale: Shear transformation scale.
     """
-    arg_dict = {'num_samples': 5000,
+    arg_dict = {'data_family': "MNIST1DCustom",
+                'num_samples': 5000,
                 'train_split': 0.8,
                 'template_len': 12,
                 'padding': [36,60],
@@ -186,7 +191,8 @@ def generate_mnist1d_custom(data_dir: Path, num_points: int = 1000,
                 'seed': 42}
     mnist1d_dataset = mnist1d.data.make_dataset(mnist1d.utils.ObjectView(arg_dict))
     name = f'MNIST1Dcustom_scale{scale_coeff}_maxtrans{max_translation}_corrnoise{corr_noise_scale}_iidnoise{iid_noise_scale}_shear{shear_scale}'
-    mnist1d_save_data(data_dir, name, num_points, mnist1d_dataset, additional_info=arg_dict) 
+    mnist1d_save_data(data_dir, name, num_points, mnist1d_dataset, 
+                      additional_info=arg_dict) 
 
 def mnist_save_data(data_dir, name, num_points, mnist_dataset,
                     vector_dim=28 * 28,
@@ -228,8 +234,12 @@ def generate_mnist(data_dir: Path, num_points: int = 1000) -> None:
         transforms.ToTensor(),
         transforms.Normalize((0.5,), (0.5,))
     ])
+    arg_dict = {'data_family': "MNIST"}
+
     mnist_dataset = datasets.MNIST(root=str(data_dir.parent.parent / 'data' / 'external'), train=True, download=True, transform=transform)
-    mnist_save_data(data_dir, 'MNIST', num_points, mnist_dataset, vector_dim=28*28)
+    mnist_save_data(data_dir, 'MNIST', num_points, mnist_dataset, 
+                    vector_dim=28*28,
+                    additional_info=arg_dict)
 
 def generate_mnist_custom(data_dir: Path, num_points: int = 1000,
                           dataset_name = 'MNIST',
@@ -253,6 +263,7 @@ def generate_mnist_custom(data_dir: Path, num_points: int = 1000,
         transforms.RandomAffine(degrees=degrees, translate=translate, scale=scale)
     ])
     additional_info = {
+        'dataset_family': "MNISTCustom",
         'dataset_name': dataset_name,
         'degrees': degrees,
         'translate': translate,
@@ -332,9 +343,34 @@ def generate_all(data_dir: Path) -> None:
     generate_regression_circle(data_dir)
     generate_manifold(data_dir)
     generate_mnist1d(data_dir)
-    generate_mnist1d_custom(data_dir, iid_noise_scale=4e-2)
-    generate_mnist_custom(data_dir, dataset_name='EMNIST', degrees=(0, 10))
     generate_mnist(data_dir)
     generate_emlocalization(data_dir)
     generate_lunarlander(data_dir)
     generate_massspec(data_dir)
+
+    l1_range = np.arange(0.5, 1.51, 0.5)
+    l2_range = np.arange(0.5, 1.51, 0.5)
+    l3_range = np.arange(0.5, 1.51, 0.5)
+    l4_range = np.arange(0.5, 1.51, 0.5)
+    for l1,l2,l3,l4 in product(l1_range, l2_range, l3_range, l4_range):
+        print(l1,l2,l3,l4)
+        generate_mnist1d_custom(data_dir, 
+                                scale_coeff=l1*0.4, 
+                                corr_noise_scale=l2*0.25, 
+                                iid_noise_scale=l3*2e-2,
+                                shear_scale=l4*0.75)
+
+    l1_range = np.arange(0, 91, 45)
+    l2_range = np.arange(0, 1.01, 0.5)
+    l3_range = np.arange(0.5, 1.01, 0.25)
+    for dataset_name in ('MNIST', 'EMNIST', 'KMNIST', 'FashionMNIST'):
+        for l1,l2,l3 in product(l1_range, l2_range, l3_range):
+            print(dataset_name, l1, l2, l3)
+            generate_mnist_custom(data_dir,
+                                  dataset_name=dataset_name, 
+                                  degrees=(0, int(l1)),
+                                  translate=(0, l2),
+                                  scale=(l3, 1))   
+
+
+
