@@ -188,6 +188,7 @@ def generate_mnist1d_custom(data_dir: Path, num_points: int = 1000,
                 'shear_scale': shear_scale,
                 'shuffle_seq': False,
                 'final_seq_length': 40,
+                'dataset_name': 'MNIST1D',
                 'seed': 42}
     mnist1d_dataset = mnist1d.data.make_dataset(mnist1d.utils.ObjectView(arg_dict))
     name = f'MNIST1Dcustom_scale{scale_coeff}_maxtrans{max_translation}_corrnoise{corr_noise_scale}_iidnoise{iid_noise_scale}_shear{shear_scale}'
@@ -330,7 +331,7 @@ def generate_massspec(data_dir: Path) -> None:
     start_data.iloc[:, -512:] = 0.0
     save_data(data_dir, 'MassSpec', start_data, target_data, x_y_index=1433-512)
 
-def generate_all(data_dir: Path) -> None:
+def generate_all(data_dir: Path, all: bool) -> None:
     """
     Generate all datasets (synthetic and real) and save them in the processed directory.
     Args:
@@ -348,10 +349,16 @@ def generate_all(data_dir: Path) -> None:
     generate_lunarlander(data_dir)
     generate_massspec(data_dir)
 
-    l1_range = np.arange(0.5, 1.51, 0.5)
-    l2_range = np.arange(0.5, 1.51, 0.5)
-    l3_range = np.arange(0.5, 1.51, 0.5)
-    l4_range = np.arange(0.5, 1.51, 0.5)
+    if all:
+        l1_range = np.arange(0.5, 1.51, 0.5)
+        l2_range = np.arange(0.5, 1.51, 0.5)
+        l3_range = np.arange(0.5, 1.51, 0.5)
+        l4_range = np.arange(0.5, 1.51, 0.5)
+    else:
+        l1_range = [1.0]
+        l2_range = [1.0]
+        l3_range = [1.0]
+        l4_range = [1.0]
     for l1,l2,l3,l4 in product(l1_range, l2_range, l3_range, l4_range):
         print(l1,l2,l3,l4)
         generate_mnist1d_custom(data_dir, 
@@ -360,9 +367,14 @@ def generate_all(data_dir: Path) -> None:
                                 iid_noise_scale=l3*2e-2,
                                 shear_scale=l4*0.75)
 
-    l1_range = np.arange(0, 91, 45)
-    l2_range = np.arange(0, 1.01, 0.5)
-    l3_range = np.arange(0.5, 1.01, 0.25)
+    if all:
+        l1_range = np.arange(0, 91, 45)
+        l2_range = np.arange(0, 1.01, 0.5)
+        l3_range = np.arange(0.5, 1.01, 0.25)
+    else:
+        l1_range = [0]
+        l2_range = [0]
+        l3_range = [1]
     for dataset_name in ('MNIST', 'EMNIST', 'KMNIST', 'FashionMNIST'):
         for l1,l2,l3 in product(l1_range, l2_range, l3_range):
             print(dataset_name, l1, l2, l3)
