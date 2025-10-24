@@ -7,6 +7,7 @@ import generatedata.config
 
 DATA_URL = generatedata.config.DATA_URL
 
+
 def data_names(local=False) -> list:
     """List the names of the datasets that are available to load.
 
@@ -17,13 +18,14 @@ def data_names(local=False) -> list:
         # The directory in which the notebook is located.
         base_dir = pathlib.Path(generatedata.__path__[0])
         # The directory where the data is stored.
-        data_dir = base_dir / '../data/processed'
-        data_info = json.load(open(data_dir / 'info.json', 'r'))
+        data_dir = base_dir / "../data/processed"
+        data_info = json.load(open(data_dir / "info.json", "r"))
     else:
         # Read the info json file from the URL DATA_URL+'/info.json'
-        response = requests.get(DATA_URL+'/info.json')    
+        response = requests.get(DATA_URL + "/info.json")
         data_info = response.json()
     return list(data_info.keys())
+
 
 def load_data(name: str, local=False, data_dir=None) -> dict:
     """Load in the dataset with the given name.  This functions loads in a variety of datasets created by the
@@ -43,26 +45,27 @@ def load_data(name: str, local=False, data_dir=None) -> dict:
             # The directory in which the notebook is located.
             base_dir = pathlib.Path(generatedata.__path__[0])
             # The directory where the data is stored.
-            data_dir = base_dir / '../data/processed'
+            data_dir = base_dir / "../data/processed"
 
         # load in the info for the datasets
-        with open(data_dir / f'info.json', 'r') as f:
+        with open(data_dir / "info.json", "r") as f:
             data_info = json.load(f)[name]
 
         # Read the start data
-        z_start = pd.read_parquet(data_dir / f'{name}_start.parquet')
+        z_start = pd.read_parquet(data_dir / f"{name}_start.parquet")
         # Read the target data
-        z_target = pd.read_parquet(data_dir / f'{name}_target.parquet')
+        z_target = pd.read_parquet(data_dir / f"{name}_target.parquet")
     else:
         # Read in the info for the datasets
-        response = requests.get(DATA_URL+'/info.json')    
-        data_info = response.json()
+        response = requests.get(DATA_URL + "/info.json")
+        data_info = response.json()[name]
         # Read the start data
-        z_start = pd.read_parquet(DATA_URL+f'/{name}_start.parquet')
+        z_start = pd.read_parquet(DATA_URL + f"/{name}_start.parquet")
         # Read the target data
-        z_target = pd.read_parquet(DATA_URL+f'/{name}_target.parquet')
-        
-    return {'info': data_info, 'start': z_start, 'target': z_target}
+        z_target = pd.read_parquet(DATA_URL + f"/{name}_target.parquet")
+
+    return {"info": data_info, "start": z_start, "target": z_target}
+
 
 def load_data_as_xy(name: str, local=False, data_dir=None) -> tuple:
     """Load in the dataset with the given name and return it as a tuple of (X, Y).
@@ -75,10 +78,15 @@ def load_data_as_xy(name: str, local=False, data_dir=None) -> tuple:
         tuple: (X, Y) where X and Y are pandas DataFrames
     """
     data = load_data(name, local=local, data_dir=data_dir)
-    info = data['info']
-    if 'x_y_index' not in info or 'x_size' not in info or 'y_size' not in info:
-        raise ValueError(f"Dataset {name} does not have the required keys in info.json: 'x_y_index', 'x_size', 'y_size'.")
-    return data['target'].iloc[:, :info['x_y_index']], data['target'].iloc[:, info['x_y_index']:]
+    info = data["info"]
+    if "x_y_index" not in info or "x_size" not in info or "y_size" not in info:
+        raise ValueError(
+            f"Dataset {name} does not have the required keys in info.json: 'x_y_index', 'x_size', 'y_size'."
+        )
+    return data["target"].iloc[:, : info["x_y_index"]], data["target"].iloc[
+        :, info["x_y_index"] :
+    ]
+
 
 def load_data_as_xy_onehot(name: str, local=False, data_dir=None) -> tuple:
     """Load in the dataset with the given name and return it as a tuple of (X, Y).
@@ -91,15 +99,22 @@ def load_data_as_xy_onehot(name: str, local=False, data_dir=None) -> tuple:
         tuple: (X, Y) where X and Y are pandas DataFrames
     """
     data = load_data(name, local=local, data_dir=data_dir)
-    info = data['info']
+    info = data["info"]
     # Check if the required keys are present in the info.json
-    if 'onehot_y' not in info:
-        raise ValueError(f"Dataset {name} does not have the required key 'onehot_y' in info.json.")
-    if info['onehot_y'] != 1:
-        raise ValueError(f"Dataset {name} does not have 'onehot_y' set to True in info.json.")
+    if "onehot_y" not in info:
+        raise ValueError(
+            f"Dataset {name} does not have the required key 'onehot_y' in info.json."
+        )
+    if info["onehot_y"] != 1:
+        raise ValueError(
+            f"Dataset {name} does not have 'onehot_y' set to True in info.json."
+        )
     # Check if the other required keys are present
     # 'x_y_index', 'x_size', and 'y_size'
-    if 'x_y_index' not in info or 'x_size' not in info or 'y_size' not in info:
-        raise ValueError(f"Dataset {name} does not have the required keys in info.json: 'x_y_index', 'x_size', 'y_size'.")
-    return data['target'].iloc[:, :info['x_y_index']], data['target'].iloc[:, info['x_y_index']:]
-
+    if "x_y_index" not in info or "x_size" not in info or "y_size" not in info:
+        raise ValueError(
+            f"Dataset {name} does not have the required keys in info.json: 'x_y_index', 'x_size', 'y_size'."
+        )
+    return data["target"].iloc[:, : info["x_y_index"]], data["target"].iloc[
+        :, info["x_y_index"] :
+    ]

@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "generatedata"
-version = "0.1.0"
+version = "0.3.0"
 description = "Library of code to generate synthetic data for testing and benchmarking machine learning algorithms in a consistent dynamical systems setting."
 authors = ["Randy Paffenroth <rcpaffenroth@wpi.edu>"]
 license = "BSD 3-Clause License"
