@@ -4,6 +4,7 @@ import generatedata
 import json
 import requests
 import generatedata.config
+import random
 
 DATA_URL = generatedata.config.DATA_URL
 
@@ -25,6 +26,21 @@ def data_names(local=False) -> list:
         response = requests.get(DATA_URL + "/info.json")
         data_info = response.json()
     return list(data_info.keys())
+
+
+def get_random_data_name(local=False) -> str:
+    """Return a random dataset name from the available datasets.
+
+    Args:
+        local (bool): If True, list datasets from the local processed data directory.
+
+    Returns:
+        str: A randomly chosen dataset name.
+    """
+    names = data_names(local=local)
+    if not names:
+        raise ValueError("No dataset names available to choose from.")
+    return random.choice(names)
 
 
 def load_data(name: str, local=False, data_dir=None) -> dict:
