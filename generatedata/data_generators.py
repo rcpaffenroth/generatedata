@@ -29,13 +29,17 @@ def dataset_exists(data_dir: Path, name: str) -> bool:
 
 def create_info_json(data_dir: Path) -> None:
     """
-    Create an empty info.json file in the processed data directory.
+    Create an empty info.json file in the processed data directory if it does not already exist.
+    Preserves any existing content so that skipped datasets retain their metadata.
     Args:
         data_dir: Path to the processed data directory.
     """
-    info = {}
-    with open(data_dir / 'info.json', 'w+') as f:
-        json.dump(info, f)
+    if not data_dir.exists():
+        data_dir.mkdir(parents=True)
+    info_path = data_dir / 'info.json'
+    if not info_path.exists():
+        with open(info_path, 'w') as f:
+            json.dump({}, f)
 
 def generate_regression_line(data_dir: Path, num_points: int = 1000) -> None:
     """
@@ -132,9 +136,14 @@ def generate_manifold(data_dir: Path, num_points: int = 1000) -> None:
     target_data = {f'x{i}': x_on[:, i] for i in range(x_on.shape[1])}
     save_data(data_dir, 'manifold', start_data, target_data)
 
-def mnist1d_save_data(data_dir, name, num_points, mnist1d_dataset,
-                                vector_dim=40,
-                                additional_info=None):
+def mnist1d_save_data(
+    data_dir: Path,
+    name: str,
+    num_points: int,
+    mnist1d_dataset: dict,
+    vector_dim: int = 40,
+    additional_info: dict | None = None,
+) -> None:
     """
     Save MNIST1D data in the required format for experiments.
     Args:
@@ -174,10 +183,15 @@ def generate_mnist1d(data_dir: Path, num_points: int = 1000) -> None:
     mnist1d_save_data(data_dir, 'MNIST1D', num_points, mnist1d_dataset,
                       additional_info = arg_dict) 
 
-def generate_mnist1d_custom(data_dir: Path, num_points: int = 1000,
-                            scale_coeff=0.4, max_translation=48,
-                            corr_noise_scale=0.25, iid_noise_scale=2e-2,
-                            shear_scale=0.75) -> None:
+def generate_mnist1d_custom(
+    data_dir: Path,
+    num_points: int = 1000,
+    scale_coeff: float = 0.4,
+    max_translation: int = 48,
+    corr_noise_scale: float = 0.25,
+    iid_noise_scale: float = 2e-2,
+    shear_scale: float = 0.75,
+) -> None:
     """
     Generate a custom MNIST1D dataset with user-specified parameters.
     Args:
@@ -208,9 +222,14 @@ def generate_mnist1d_custom(data_dir: Path, num_points: int = 1000,
     mnist1d_save_data(data_dir, name, num_points, mnist1d_dataset, 
                       additional_info=arg_dict) 
 
-def mnist_save_data(data_dir, name, num_points, mnist_dataset,
-                    vector_dim=28 * 28,
-                    additional_info=None):
+def mnist_save_data(
+    data_dir: Path,
+    name: str,
+    num_points: int,
+    mnist_dataset,
+    vector_dim: int = 28 * 28,
+    additional_info: dict | None = None,
+) -> None:
     """
     Save MNIST-like data (including EMNIST, KMNIST, FashionMNIST) in the required format.
     Args:
@@ -255,9 +274,14 @@ def generate_mnist(data_dir: Path, num_points: int = 1000) -> None:
                     vector_dim=28*28,
                     additional_info=arg_dict)
 
-def generate_mnist_custom(data_dir: Path, num_points: int = 1000,
-                          dataset_name = 'MNIST',
-                          degrees=(0,0), translate=(0,0), scale=(1,1)) -> None:
+def generate_mnist_custom(
+    data_dir: Path,
+    num_points: int = 1000,
+    dataset_name: str = 'MNIST',
+    degrees: tuple[int, int] = (0, 0),
+    translate: tuple[float, float] = (0, 0),
+    scale: tuple[float, float] = (1, 1),
+) -> None:
     """
     Generate a custom MNIST-like dataset (MNIST, EMNIST, KMNIST, FashionMNIST) with affine transforms.
     Args:
