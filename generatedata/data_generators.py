@@ -406,7 +406,8 @@ def generate_all(data_dir: Path, all: bool) -> None:
         l1_range = [0]
         l2_range = [0]
         l3_range = [1]
-    for dataset_name in ('MNIST', 'EMNIST', 'KMNIST', 'FashionMNIST'):
+    # for dataset_name in ('MNIST', 'EMNIST', 'KMNIST', 'FashionMNIST'):
+    for dataset_name in ('MNIST', 'EMNIST', 'FashionMNIST'):
         for l1, l2, l3 in product(l1_range, l2_range, l3_range):
             degrees = (0, int(l1))
             translate = (0, l2)
