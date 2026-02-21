@@ -20,7 +20,8 @@ def data_names(local=False) -> list:
         base_dir = pathlib.Path(generatedata.__path__[0])
         # The directory where the data is stored.
         data_dir = base_dir / "../data/processed"
-        data_info = json.load(open(data_dir / "info.json", "r"))
+        with open(data_dir / "info.json", "r") as f:
+            data_info = json.load(f)
     else:
         # Read the info json file from the URL DATA_URL+'/info.json'
         response = requests.get(DATA_URL + "/info.json")
