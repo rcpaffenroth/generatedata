@@ -54,6 +54,10 @@ def load_data(name: str, local=False, data_dir=None) -> dict:
     Returns:
         dict: the start and target points of the dataset
     """
+    valid_names = data_names(local=local)
+    if name not in valid_names:
+        raise ValueError(f"Unknown dataset '{name}'. Available datasets: {valid_names}")
+
     if local:
         # If a data_dir is provided, use it, otherwise use the default data directory
         if data_dir is not None:
