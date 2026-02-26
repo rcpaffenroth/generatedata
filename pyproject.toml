@@ -1,38 +1,37 @@
-[tool.poetry]
+[project]
 name = "generatedata"
 version = "0.3.1"
 description = "Library of code to generate synthetic data for testing and benchmarking machine learning algorithms in a consistent dynamical systems setting."
-authors = ["Randy Paffenroth <rcpaffenroth@wpi.edu>"]
-license = "BSD 3-Clause License"
+authors = [{name = "Randy Paffenroth", email = "rcpaffenroth@wpi.edu"}]
+license = {text = "BSD 3-Clause License"}
 readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "torch==2.5.1",
+    "torchvision>=0.20,<0.21",
+    "numpy>=2.1,<2.2",
+    "mnist1d",
+    "pandas>=2.2,<2.3",
+    "pyarrow>=17,<18",
+    "matplotlib>=3.9,<3.10",
+    "plotly>=5.24,<5.25",
+    "ipykernel>=6.29,<6.30",
+    "ipympl>=0.9,<0.10",
+    "jupyterlab>=4.3,<4.4",
+    "scikit-learn>=1.6,<1.7",
+]
 
-[tool.poetry.dependencies]
-python = "^3.10"
-# For the computational code
-torch = {version = "2.5.1", source = "pytorch"}
-torchvision = {version = "0.20.*", source = "pytorch"}
-numpy = "2.1.*"
-# the mnist1d creation
-mnist1d = "*"
-# For data
-pandas = "2.2.*"
-pyarrow = "17.*.*"
-# For the notebooks and vscode
-matplotlib = "3.9.*"
-plotly = "5.24.*"
-ipykernel = "6.29.*"
-ipympl = "0.9.*"
-jupyterlab = "4.3.*"
-scikit-learn = "1.6.*"
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.3,<8.4",
+    "pylint>=3.2,<3.3",
+    "nbmake>=1.5,<1.6",
+    "jupytext>=1.16,<1.17",
+]
 
-[tool.poetry.group.dev]
-optional = true
-
-[tool.poetry.group.dev.dependencies]
-pytest = "8.3.*"
-pylint = "3.2.*"
-nbmake = "1.5.*"
-jupytext = "1.16.*"
+[tool.uv]
+index-url = "https://download.pytorch.org/whl/cu121"
+extra-index-url = ["https://pypi.org/simple"]
 
 [tool.pytest.ini_options]
 minversion = "6.0"
@@ -41,11 +40,6 @@ testpaths = [
     "tests",
 ]
 
-[[tool.poetry.source]]
-name = "pytorch"
-url = "https://download.pytorch.org/whl/cu121"
-priority = "explicit"
-
 [build-system]
-requires = ["poetry-core"]
-build-backend = "poetry.core.masonry.api"
+requires = ["hatchling"]
+build-backend = "hatchling.build"
