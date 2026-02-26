@@ -11,7 +11,7 @@ def test_load_data_returns_dict():
     df_dir = pathlib.Path('tests/data')
     df_start = pd.DataFrame({'x0': np.arange(10), 'x1': np.arange(10, 20)})
     df_target = pd.DataFrame({'x0': np.arange(20, 30), 'x1': np.arange(30, 40)})
-    df_name = 'test_load_data'
+    df_name = 'MNIST1D'
     save_data.save_data(df_dir, df_name, df_start, df_target)
     
     # Test loading

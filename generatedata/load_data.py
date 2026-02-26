@@ -1,14 +1,16 @@
 import pandas as pd
 import pathlib
+from pathlib import Path
 import generatedata
 import json
 import requests
 import generatedata.config
+import random
 
 DATA_URL = generatedata.config.DATA_URL
 
 
-def data_names(local=False) -> list:
+def data_names(local: bool = False) -> list[str]:
     """List the names of the datasets that are available to load.
 
     Returns:
@@ -19,7 +21,8 @@ def data_names(local=False) -> list:
         base_dir = pathlib.Path(generatedata.__path__[0])
         # The directory where the data is stored.
         data_dir = base_dir / "../data/processed"
-        data_info = json.load(open(data_dir / "info.json", "r"))
+        with open(data_dir / "info.json", "r") as f:
+            data_info = json.load(f)
     else:
         # Read the info json file from the URL DATA_URL+'/info.json'
         response = requests.get(DATA_URL + "/info.json")
@@ -27,7 +30,22 @@ def data_names(local=False) -> list:
     return list(data_info.keys())
 
 
-def load_data(name: str, local=False, data_dir=None) -> dict:
+def get_random_data_name(local: bool = False) -> str:
+    """Return a random dataset name from the available datasets.
+
+    Args:
+        local (bool): If True, list datasets from the local processed data directory.
+
+    Returns:
+        str: A randomly chosen dataset name.
+    """
+    names = data_names(local=local)
+    if not names:
+        raise ValueError("No dataset names available to choose from.")
+    return random.choice(names)
+
+
+def load_data(name: str, local: bool = False, data_dir: Path | str | None = None) -> dict:
     """Load in the dataset with the given name.  This functions loads in a variety of datasets created by the
     `scripts/generate-data.py` script.
 
@@ -37,6 +55,10 @@ def load_data(name: str, local=False, data_dir=None) -> dict:
     Returns:
         dict: the start and target points of the dataset
     """
+    valid_names = data_names(local=local)
+    if name not in valid_names:
+        raise ValueError(f"Unknown dataset '{name}'. Available datasets: {valid_names}")
+
     if local:
         # If a data_dir is provided, use it, otherwise use the default data directory
         if data_dir is not None:
@@ -67,7 +89,7 @@ def load_data(name: str, local=False, data_dir=None) -> dict:
     return {"info": data_info, "start": z_start, "target": z_target}
 
 
-def load_data_as_xy(name: str, local=False, data_dir=None) -> tuple:
+def load_data_as_xy(name: str, local: bool = False, data_dir: Path | str | None = None) -> tuple[pd.DataFrame, pd.DataFrame]:
     """Load in the dataset with the given name and return it as a tuple of (X, Y).
     Note, the dataset must define the info json with the keys 'x_y_index', 'x_size', and 'y_size'.
 
@@ -88,7 +110,7 @@ def load_data_as_xy(name: str, local=False, data_dir=None) -> tuple:
     ]
 
 
-def load_data_as_xy_onehot(name: str, local=False, data_dir=None) -> tuple:
+def load_data_as_xy_onehot(name: str, local: bool = False, data_dir: Path | str | None = None) -> tuple[pd.DataFrame, pd.DataFrame]:
     """Load in the dataset with the given name and return it as a tuple of (X, Y).
     Note, the dataset must define the info json with the keys 'x_y_index', 'x_size', 'y_size', and 'onehot_y'. And the 'onehot_y' must be set to True.
 

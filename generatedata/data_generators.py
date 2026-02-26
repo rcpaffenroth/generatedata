@@ -14,15 +14,32 @@ from generatedata.save_data import save_data
 import mnist1d
 
 
+def dataset_exists(data_dir: Path, name: str) -> bool:
+    """Check if a dataset already exists in the processed directory.
+    Args:
+        data_dir: Path to the processed data directory.
+        name: Dataset name.
+    Returns:
+        True if both start and target parquet files exist.
+    """
+    return (
+        (data_dir / f'{name}_start.parquet').exists() and
+        (data_dir / f'{name}_target.parquet').exists()
+    )
+
 def create_info_json(data_dir: Path) -> None:
     """
-    Create an empty info.json file in the processed data directory.
+    Create an empty info.json file in the processed data directory if it does not already exist.
+    Preserves any existing content so that skipped datasets retain their metadata.
     Args:
         data_dir: Path to the processed data directory.
     """
-    info = {}
-    with open(data_dir / 'info.json', 'w+') as f:
-        json.dump(info, f)
+    if not data_dir.exists():
+        data_dir.mkdir(parents=True)
+    info_path = data_dir / 'info.json'
+    if not info_path.exists():
+        with open(info_path, 'w') as f:
+            json.dump({}, f)
 
 def generate_regression_line(data_dir: Path, num_points: int = 1000) -> None:
     """
@@ -119,9 +136,14 @@ def generate_manifold(data_dir: Path, num_points: int = 1000) -> None:
     target_data = {f'x{i}': x_on[:, i] for i in range(x_on.shape[1])}
     save_data(data_dir, 'manifold', start_data, target_data)
 
-def mnist1d_save_data(data_dir, name, num_points, mnist1d_dataset,
-                                vector_dim=40,
-                                additional_info=None):
+def mnist1d_save_data(
+    data_dir: Path,
+    name: str,
+    num_points: int,
+    mnist1d_dataset: dict,
+    vector_dim: int = 40,
+    additional_info: dict | None = None,
+) -> None:
     """
     Save MNIST1D data in the required format for experiments.
     Args:
@@ -161,10 +183,15 @@ def generate_mnist1d(data_dir: Path, num_points: int = 1000) -> None:
     mnist1d_save_data(data_dir, 'MNIST1D', num_points, mnist1d_dataset,
                       additional_info = arg_dict) 
 
-def generate_mnist1d_custom(data_dir: Path, num_points: int = 1000,
-                            scale_coeff=0.4, max_translation=48,
-                            corr_noise_scale=0.25, iid_noise_scale=2e-2,
-                            shear_scale=0.75) -> None:
+def generate_mnist1d_custom(
+    data_dir: Path,
+    num_points: int = 1000,
+    scale_coeff: float = 0.4,
+    max_translation: int = 48,
+    corr_noise_scale: float = 0.25,
+    iid_noise_scale: float = 2e-2,
+    shear_scale: float = 0.75,
+) -> None:
     """
     Generate a custom MNIST1D dataset with user-specified parameters.
     Args:
@@ -195,9 +222,14 @@ def generate_mnist1d_custom(data_dir: Path, num_points: int = 1000,
     mnist1d_save_data(data_dir, name, num_points, mnist1d_dataset, 
                       additional_info=arg_dict) 
 
-def mnist_save_data(data_dir, name, num_points, mnist_dataset,
-                    vector_dim=28 * 28,
-                    additional_info=None):
+def mnist_save_data(
+    data_dir: Path,
+    name: str,
+    num_points: int,
+    mnist_dataset,
+    vector_dim: int = 28 * 28,
+    additional_info: dict | None = None,
+) -> None:
     """
     Save MNIST-like data (including EMNIST, KMNIST, FashionMNIST) in the required format.
     Args:
@@ -242,9 +274,14 @@ def generate_mnist(data_dir: Path, num_points: int = 1000) -> None:
                     vector_dim=28*28,
                     additional_info=arg_dict)
 
-def generate_mnist_custom(data_dir: Path, num_points: int = 1000,
-                          dataset_name = 'MNIST',
-                          degrees=(0,0), translate=(0,0), scale=(1,1)) -> None:
+def generate_mnist_custom(
+    data_dir: Path,
+    num_points: int = 1000,
+    dataset_name: str = 'MNIST',
+    degrees: tuple[int, int] = (0, 0),
+    translate: tuple[float, float] = (0, 0),
+    scale: tuple[float, float] = (1, 1),
+) -> None:
     """
     Generate a custom MNIST-like dataset (MNIST, EMNIST, KMNIST, FashionMNIST) with affine transforms.
     Args:
@@ -334,20 +371,29 @@ def generate_massspec(data_dir: Path) -> None:
 def generate_all(data_dir: Path, all: bool) -> None:
     """
     Generate all datasets (synthetic and real) and save them in the processed directory.
+    Skips generation for any dataset whose parquet files already exist.
     Args:
         data_dir: Path to save the data.
+        all: If True, generate full parameter sweeps; otherwise use default parameters.
     """
     create_info_json(data_dir)
-    generate_regression_line(data_dir)
-    generate_pca_line(data_dir)
-    generate_circle(data_dir)
-    generate_regression_circle(data_dir)
-    generate_manifold(data_dir)
-    generate_mnist1d(data_dir)
-    generate_mnist(data_dir)
-    generate_emlocalization(data_dir)
-    generate_lunarlander(data_dir)
-    generate_massspec(data_dir)
+
+    for name, generator in [
+        ('regression_line', lambda: generate_regression_line(data_dir)),
+        ('pca_line',        lambda: generate_pca_line(data_dir)),
+        ('circle',          lambda: generate_circle(data_dir)),
+        ('regression_circle', lambda: generate_regression_circle(data_dir)),
+        ('manifold',        lambda: generate_manifold(data_dir)),
+        ('MNIST1D',         lambda: generate_mnist1d(data_dir)),
+        ('MNIST',           lambda: generate_mnist(data_dir)),
+        ('EMlocalization',  lambda: generate_emlocalization(data_dir)),
+        ('LunarLander',     lambda: generate_lunarlander(data_dir)),
+        ('MassSpec',        lambda: generate_massspec(data_dir)),
+    ]:
+        if dataset_exists(data_dir, name):
+            print(f'Skipping {name} (already exists)')
+        else:
+            generator()
 
     if all:
         l1_range = np.arange(0.5, 1.51, 0.5)
@@ -359,13 +405,22 @@ def generate_all(data_dir: Path, all: bool) -> None:
         l2_range = [1.0]
         l3_range = [1.0]
         l4_range = [1.0]
-    for l1,l2,l3,l4 in product(l1_range, l2_range, l3_range, l4_range):
-        print(l1,l2,l3,l4)
-        generate_mnist1d_custom(data_dir, 
-                                scale_coeff=l1*0.4, 
-                                corr_noise_scale=l2*0.25, 
-                                iid_noise_scale=l3*2e-2,
-                                shear_scale=l4*0.75)
+    for l1, l2, l3, l4 in product(l1_range, l2_range, l3_range, l4_range):
+        scale_coeff = l1 * 0.4
+        corr_noise_scale = l2 * 0.25
+        iid_noise_scale = l3 * 2e-2
+        shear_scale = l4 * 0.75
+        name = (f'MNIST1Dcustom_scale{scale_coeff}_maxtrans48'
+                f'_corrnoise{corr_noise_scale}_iidnoise{iid_noise_scale}_shear{shear_scale}')
+        if dataset_exists(data_dir, name):
+            print(f'Skipping {name} (already exists)')
+        else:
+            print(l1, l2, l3, l4)
+            generate_mnist1d_custom(data_dir,
+                                    scale_coeff=scale_coeff,
+                                    corr_noise_scale=corr_noise_scale,
+                                    iid_noise_scale=iid_noise_scale,
+                                    shear_scale=shear_scale)
 
     if all:
         l1_range = np.arange(0, 91, 45)
@@ -375,14 +430,23 @@ def generate_all(data_dir: Path, all: bool) -> None:
         l1_range = [0]
         l2_range = [0]
         l3_range = [1]
-    for dataset_name in ('MNIST', 'EMNIST', 'KMNIST', 'FashionMNIST'):
-        for l1,l2,l3 in product(l1_range, l2_range, l3_range):
-            print(dataset_name, l1, l2, l3)
-            generate_mnist_custom(data_dir,
-                                  dataset_name=dataset_name, 
-                                  degrees=(0, int(l1)),
-                                  translate=(0, l2),
-                                  scale=(l3, 1))   
+    # for dataset_name in ('MNIST', 'EMNIST', 'KMNIST', 'FashionMNIST'):
+    for dataset_name in ('MNIST', 'EMNIST', 'FashionMNIST'):
+        for l1, l2, l3 in product(l1_range, l2_range, l3_range):
+            degrees = (0, int(l1))
+            translate = (0, l2)
+            scale = (l3, 1)
+            name = (f"{dataset_name}_custom_degrees{degrees[0]}_{degrees[1]}"
+                    f"_translate{translate[0]}_{translate[1]}_scale{scale[0]}_{scale[1]}")
+            if dataset_exists(data_dir, name):
+                print(f'Skipping {name} (already exists)')
+            else:
+                print(dataset_name, l1, l2, l3)
+                generate_mnist_custom(data_dir,
+                                      dataset_name=dataset_name,
+                                      degrees=degrees,
+                                      translate=translate,
+                                      scale=scale)   
 
 
 
