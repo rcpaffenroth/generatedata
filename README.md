@@ -159,7 +159,7 @@ See the source for available generators: `generate_regression_line`, `generate_p
 #### Copying Data to HTTP-Served Directory
 To make generated data available via HTTP (e.g., for remote loading), use:
 ```bash
-scripts/copy_data_to_http.sh /path/to/http/dir
+./scripts/copy_data_to_http.sh /path/to/http/dir
 ```
 This will copy all processed data to the specified directory. Ensure you have write permissions and that your web server is configured to serve from this location.
 
