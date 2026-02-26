@@ -1,0 +1,21 @@
+name: Pytest Suite
+on: [pull_request]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+      - name: Install uv
+        uses: astral-sh/setup-uv@v2
+      - name: Make venv
+        run: uv venv
+      - name: Install dependencies
+        run: uv sync
+      - name: Run Tests
+        run: uv run pytest 
