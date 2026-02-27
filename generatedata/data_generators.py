@@ -311,6 +311,10 @@ def generate_mnist(data_dir: Path, num_points: int = 1000) -> None:
     ])
     arg_dict = {'data_family': "MNIST"}
 
+    # This is a more stable version of MNIST downloading that uses the S3 mirror instead of the original MNIST server, which is often down.
+    datasets.MNIST.mirrors = [
+       'https://ossci-datasets.s3.amazonaws.com/mnist/'
+    ]
     mnist_dataset = datasets.MNIST(root=str(data_dir.parent.parent / 'data' / 'external'), train=True, download=True, transform=transform)
     mnist_save_data(data_dir, 'MNIST', num_points, mnist_dataset, 
                     vector_dim=28*28,
@@ -418,7 +422,7 @@ def generate_all(data_dir: Path, all: bool) -> None:
         data_dir: Path to save the data.
         all: If True, generate full parameter sweeps; otherwise use default parameters.
     """
-    for name, generator, expected_params in [
+    data_sets = [
         ('regression_line', lambda: generate_regression_line(data_dir), {'num_points': 1000}),
         ('pca_line',        lambda: generate_pca_line(data_dir), {'num_points': 1000}),
         ('circle',          lambda: generate_circle(data_dir), {'num_points': 1000}),
@@ -429,7 +433,9 @@ def generate_all(data_dir: Path, all: bool) -> None:
         ('EMlocalization',  lambda: generate_emlocalization(data_dir), None),
         ('LunarLander',     lambda: generate_lunarlander(data_dir), None),
         ('MassSpec',        lambda: generate_massspec(data_dir), None),
-    ]:
+    ]
+
+    for name, generator, expected_params in data_sets:
         if dataset_exists(data_dir, name, expected_params):
             print(f'Skipping {name} (already exists)')
         else:
@@ -474,8 +480,14 @@ def generate_all(data_dir: Path, all: bool) -> None:
         l1_range = [0]
         l2_range = [0]
         l3_range = [1]
-    # for dataset_name in ('MNIST', 'EMNIST', 'KMNIST', 'FashionMNIST'):
-    for dataset_name in ('MNIST', 'EMNIST', 'FashionMNIST'):
+    if all:
+        # FIXME: As of 2/27/2026 KMNIST server seems to be down.  Once the server is back up, we can re-enable the full sweep.
+        # dataset_names = ['MNIST', 'EMNIST', 'KMNIST', 'FashionMNIST']
+        dataset_names = ['MNIST', 'EMNIST', 'FashionMNIST']
+    else:        
+        dataset_names = ['MNIST']
+
+    for dataset_name in dataset_names:
         for l1, l2, l3 in product(l1_range, l2_range, l3_range):
             degrees = (0, int(l1))
             translate = (0, l2)
