@@ -50,23 +50,13 @@ def save_data(
         else:
             raise ValueError("additional_info must be a dictionary")
 
-    # Open or create info.json
+    # Save individual info file for this dataset
     if not data_dir.exists():
         data_dir.mkdir(parents=True)
-    info_path = data_dir / f'info.json'
-    if not info_path.exists():
-        with open(info_path, 'w') as f:
-            json.dump({}, f)
-    with open(info_path, 'r') as f:
-        info = json.load(f)
-
-    if name in info:
-        info[name].update(data_info)
-    else:
-        info[name] = data_info
-
-    with open(data_dir / f'info.json', 'w') as f:
-        json.dump(info, f)
+        
+    dataset_info_path = data_dir / f'{name}_info.json'
+    with open(dataset_info_path, 'w') as f:
+        json.dump(data_info, f, indent=4)
 
     start_df.to_parquet(data_dir / f'{name}_start.parquet')
     target_df.to_parquet(data_dir / f'{name}_target.parquet')
