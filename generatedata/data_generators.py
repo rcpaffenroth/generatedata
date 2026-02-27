@@ -372,8 +372,8 @@ def generate_emlocalization(data_dir: Path) -> None:
         data_dir: Path to save the data.
     """
     raw_dir = data_dir.parent / 'raw'
-    X = pd.read_parquet(raw_dir / 'EM_X_train.parquet').to_numpy(dtype=np.float32)
-    Y = pd.read_parquet(raw_dir / 'EM_Y_train.parquet').to_numpy(dtype=np.float32)
+    X = pd.read_parquet(str(raw_dir / 'EM_X_train.parquet')).to_numpy(dtype=np.float32)
+    Y = pd.read_parquet(str(raw_dir / 'EM_Y_train.parquet')).to_numpy(dtype=np.float32)
     # Convert numpy arrays to tensors so the rest of the function is unchanged
     x_on = torch.cat((torch.tensor(X), torch.tensor(Y)), dim=1)
     y_max = x_on[:, -1].max()
