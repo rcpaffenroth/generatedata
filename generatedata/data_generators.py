@@ -363,12 +363,19 @@ def generate_mnist_custom(
 def generate_emlocalization(data_dir: Path) -> None:
     """
     Generate the Electric Field Range Localization dataset from raw files.
+
+    The raw data is stored as numpy .npy files (EM_X_train.npy and EM_Y_train.npy).
+    If you only have the old .pt files, run scripts/convert_em_pt_to_npy.py once to
+    convert them before running this.
+
     Args:
         data_dir: Path to save the data.
     """
-    X = torch.load(data_dir.parent / 'raw' / 'EM_X_train.pt')
-    Y = torch.load(data_dir.parent / 'raw' / 'EM_Y_train.pt')
-    x_on = torch.cat((X, Y), dim=1)
+    # np.load reads the standard .npy format -- no PyTorch required
+    X = np.load(data_dir.parent / 'raw' / 'EM_X_train.npy')
+    Y = np.load(data_dir.parent / 'raw' / 'EM_Y_train.npy')
+    # Convert numpy arrays to tensors so the rest of the function is unchanged
+    x_on = torch.cat((torch.tensor(X), torch.tensor(Y)), dim=1)
     y_max = x_on[:, -1].max()
     y_min = x_on[:, -1].min()
     x_on[:, -1] = (x_on[:, -1] - y_min) / (y_max - y_min)
