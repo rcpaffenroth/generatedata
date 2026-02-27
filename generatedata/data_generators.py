@@ -364,16 +364,16 @@ def generate_emlocalization(data_dir: Path) -> None:
     """
     Generate the Electric Field Range Localization dataset from raw files.
 
-    The raw data is stored as numpy .npy files (EM_X_train.npy and EM_Y_train.npy).
+    The raw data is stored as parquet files (EM_X_train.parquet and EM_Y_train.parquet).
     If you only have the old .pt files, run scripts/convert_em_pt_to_npy.py once to
-    convert them before running this.
+    convert them, then convert the resulting .npy files to parquet.
 
     Args:
         data_dir: Path to save the data.
     """
-    # np.load reads the standard .npy format -- no PyTorch required
-    X = np.load(data_dir.parent / 'raw' / 'EM_X_train.npy')
-    Y = np.load(data_dir.parent / 'raw' / 'EM_Y_train.npy')
+    raw_dir = data_dir.parent / 'raw'
+    X = pd.read_parquet(raw_dir / 'EM_X_train.parquet').to_numpy(dtype=np.float32)
+    Y = pd.read_parquet(raw_dir / 'EM_Y_train.parquet').to_numpy(dtype=np.float32)
     # Convert numpy arrays to tensors so the rest of the function is unchanged
     x_on = torch.cat((torch.tensor(X), torch.tensor(Y)), dim=1)
     y_max = x_on[:, -1].max()
