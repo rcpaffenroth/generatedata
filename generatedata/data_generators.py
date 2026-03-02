@@ -14,32 +14,74 @@ from generatedata.save_data import save_data
 import mnist1d
 
 
-def dataset_exists(data_dir: Path, name: str) -> bool:
+def dataset_exists(data_dir: Path, name: str, expected_params: dict | None = None) -> bool:
     """Check if a dataset already exists in the processed directory.
+    
+    To avoid using stale data, this checks that the data files exist AND 
+    that the saved parameters in the JSON file match the expected parameters.
+    
     Args:
         data_dir: Path to the processed data directory.
         name: Dataset name.
+        expected_params: Optional dictionary of parameters that must match the saved info.
     Returns:
-        True if both start and target parquet files exist.
+        True if both start and target parquet files exist, the info.json exists,
+        and (if provided) the parameters match.
     """
-    return (
-        (data_dir / f'{name}_start.parquet').exists() and
-        (data_dir / f'{name}_target.parquet').exists()
-    )
+    start_exists = (data_dir / f'{name}_start.parquet').exists()
+    target_exists = (data_dir / f'{name}_target.parquet').exists()
+    info_exists = (data_dir / f'{name}_info.json').exists()
+    
+    if not (start_exists and target_exists and info_exists):
+        return False
+        
+    # If we expect specific parameters, check that they match what was saved
+    if expected_params is not None:
+        try:
+            with open(data_dir / f'{name}_info.json', 'r') as f:
+                saved_info = json.load(f)
+            for key, value in expected_params.items():
+                if saved_info.get(key) != value:
+                    return False
+        except (json.JSONDecodeError, IOError):
+            return False
+            
+    return True
 
-def create_info_json(data_dir: Path) -> None:
+def compile_info_json(data_dir: Path) -> None:
     """
-    Create an empty info.json file in the processed data directory if it does not already exist.
-    Preserves any existing content so that skipped datasets retain their metadata.
+    Compile a single info.json file from all the individual dataset JSON files.
+    This acts as the single source of truth for what data actually exists.
+    
     Args:
         data_dir: Path to the processed data directory.
     """
     if not data_dir.exists():
-        data_dir.mkdir(parents=True)
-    info_path = data_dir / 'info.json'
-    if not info_path.exists():
-        with open(info_path, 'w') as f:
-            json.dump({}, f)
+        return
+        
+    compiled_info = {}
+    
+    # Find all individual info files
+    for info_file in data_dir.glob('*_info.json'):
+        # Extract the dataset name from the filename (e.g., 'circle_info.json' -> 'circle')
+        name = info_file.name.replace('_info.json', '')
+        
+        # Verify that the actual data files exist before adding to the compiled info
+        start_exists = (data_dir / f'{name}_start.parquet').exists()
+        target_exists = (data_dir / f'{name}_target.parquet').exists()
+        
+        if start_exists and target_exists:
+            try:
+                with open(info_file, 'r') as f:
+                    compiled_info[name] = json.load(f)
+            except (json.JSONDecodeError, IOError):
+                print(f"Warning: Could not read {info_file.name}")
+        else:
+            print(f"Warning: Found {info_file.name} but missing parquet files for {name}. Skipping.")
+            
+    # Save the compiled info
+    with open(data_dir / 'info.json', 'w') as f:
+        json.dump(compiled_info, f, indent=4)
 
 def generate_regression_line(data_dir: Path, num_points: int = 1000) -> None:
     """
@@ -269,6 +311,10 @@ def generate_mnist(data_dir: Path, num_points: int = 1000) -> None:
     ])
     arg_dict = {'data_family': "MNIST"}
 
+    # This is a more stable version of MNIST downloading that uses the S3 mirror instead of the original MNIST server, which is often down.
+    datasets.MNIST.mirrors = [
+       'https://ossci-datasets.s3.amazonaws.com/mnist/'
+    ]
     mnist_dataset = datasets.MNIST(root=str(data_dir.parent.parent / 'data' / 'external'), train=True, download=True, transform=transform)
     mnist_save_data(data_dir, 'MNIST', num_points, mnist_dataset, 
                     vector_dim=28*28,
@@ -317,12 +363,19 @@ def generate_mnist_custom(
 def generate_emlocalization(data_dir: Path) -> None:
     """
     Generate the Electric Field Range Localization dataset from raw files.
+
+    The raw data is stored as parquet files (EM_X_train.parquet and EM_Y_train.parquet).
+    If you only have the old .pt files, run scripts/convert_em_pt_to_npy.py once to
+    convert them, then convert the resulting .npy files to parquet.
+
     Args:
         data_dir: Path to save the data.
     """
-    X = torch.load(data_dir.parent / 'raw' / 'EM_X_train.pt')
-    Y = torch.load(data_dir.parent / 'raw' / 'EM_Y_train.pt')
-    x_on = torch.cat((X, Y), dim=1)
+    raw_dir = data_dir.parent / 'raw'
+    X = pd.read_parquet(str(raw_dir / 'EM_X_train.parquet')).to_numpy(dtype=np.float32)
+    Y = pd.read_parquet(str(raw_dir / 'EM_Y_train.parquet')).to_numpy(dtype=np.float32)
+    # Convert numpy arrays to tensors so the rest of the function is unchanged
+    x_on = torch.cat((torch.tensor(X), torch.tensor(Y)), dim=1)
     y_max = x_on[:, -1].max()
     y_min = x_on[:, -1].min()
     x_on[:, -1] = (x_on[:, -1] - y_min) / (y_max - y_min)
@@ -376,21 +429,21 @@ def generate_all(data_dir: Path, all: bool) -> None:
         data_dir: Path to save the data.
         all: If True, generate full parameter sweeps; otherwise use default parameters.
     """
-    create_info_json(data_dir)
+    data_sets = [
+        ('regression_line', lambda: generate_regression_line(data_dir), {'num_points': 1000}),
+        ('pca_line',        lambda: generate_pca_line(data_dir), {'num_points': 1000}),
+        ('circle',          lambda: generate_circle(data_dir), {'num_points': 1000}),
+        ('regression_circle', lambda: generate_regression_circle(data_dir), {'num_points': 1000}),
+        ('manifold',        lambda: generate_manifold(data_dir), {'num_points': 1000}),
+        ('MNIST1D',         lambda: generate_mnist1d(data_dir), {'num_points': 1000}),
+        ('MNIST',           lambda: generate_mnist(data_dir), {'num_points': 1000}),
+        ('EMlocalization',  lambda: generate_emlocalization(data_dir), None),
+        ('LunarLander',     lambda: generate_lunarlander(data_dir), None),
+        ('MassSpec',        lambda: generate_massspec(data_dir), None),
+    ]
 
-    for name, generator in [
-        ('regression_line', lambda: generate_regression_line(data_dir)),
-        ('pca_line',        lambda: generate_pca_line(data_dir)),
-        ('circle',          lambda: generate_circle(data_dir)),
-        ('regression_circle', lambda: generate_regression_circle(data_dir)),
-        ('manifold',        lambda: generate_manifold(data_dir)),
-        ('MNIST1D',         lambda: generate_mnist1d(data_dir)),
-        ('MNIST',           lambda: generate_mnist(data_dir)),
-        ('EMlocalization',  lambda: generate_emlocalization(data_dir)),
-        ('LunarLander',     lambda: generate_lunarlander(data_dir)),
-        ('MassSpec',        lambda: generate_massspec(data_dir)),
-    ]:
-        if dataset_exists(data_dir, name):
+    for name, generator, expected_params in data_sets:
+        if dataset_exists(data_dir, name, expected_params):
             print(f'Skipping {name} (already exists)')
         else:
             generator()
@@ -412,7 +465,11 @@ def generate_all(data_dir: Path, all: bool) -> None:
         shear_scale = l4 * 0.75
         name = (f'MNIST1Dcustom_scale{scale_coeff}_maxtrans48'
                 f'_corrnoise{corr_noise_scale}_iidnoise{iid_noise_scale}_shear{shear_scale}')
-        if dataset_exists(data_dir, name):
+        
+        # The parameters are encoded in the name, but we can also check num_points
+        expected_params = {'num_points': 1000}
+        
+        if dataset_exists(data_dir, name, expected_params):
             print(f'Skipping {name} (already exists)')
         else:
             print(l1, l2, l3, l4)
@@ -430,15 +487,24 @@ def generate_all(data_dir: Path, all: bool) -> None:
         l1_range = [0]
         l2_range = [0]
         l3_range = [1]
-    # for dataset_name in ('MNIST', 'EMNIST', 'KMNIST', 'FashionMNIST'):
-    for dataset_name in ('MNIST', 'EMNIST', 'FashionMNIST'):
+    if all:
+        # FIXME: As of 2/27/2026 KMNIST server seems to be down.  Once the server is back up, we can re-enable the full sweep.
+        # dataset_names = ['MNIST', 'EMNIST', 'KMNIST', 'FashionMNIST']
+        dataset_names = ['MNIST', 'EMNIST', 'FashionMNIST']
+    else:        
+        dataset_names = ['MNIST']
+
+    for dataset_name in dataset_names:
         for l1, l2, l3 in product(l1_range, l2_range, l3_range):
             degrees = (0, int(l1))
             translate = (0, l2)
             scale = (l3, 1)
             name = (f"{dataset_name}_custom_degrees{degrees[0]}_{degrees[1]}"
                     f"_translate{translate[0]}_{translate[1]}_scale{scale[0]}_{scale[1]}")
-            if dataset_exists(data_dir, name):
+            
+            expected_params = {'num_points': 1000}
+            
+            if dataset_exists(data_dir, name, expected_params):
                 print(f'Skipping {name} (already exists)')
             else:
                 print(dataset_name, l1, l2, l3)
@@ -447,6 +513,9 @@ def generate_all(data_dir: Path, all: bool) -> None:
                                       degrees=degrees,
                                       translate=translate,
                                       scale=scale)   
+
+    # Finally, compile all the individual info files into a single info.json
+    compile_info_json(data_dir)
 
 
 

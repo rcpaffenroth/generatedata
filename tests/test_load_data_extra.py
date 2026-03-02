@@ -14,6 +14,10 @@ def test_load_data_returns_dict():
     df_name = 'MNIST1D'
     save_data.save_data(df_dir, df_name, df_start, df_target)
     
+    # Compile info.json so load_data can find it
+    from generatedata.data_generators import compile_info_json
+    compile_info_json(df_dir)
+    
     # Test loading
     data = load_data.load_data(df_name, local=True,data_dir=df_dir)
     assert isinstance(data, dict)
@@ -26,10 +30,13 @@ def test_load_data_returns_dict():
     import os
     os.remove(df_dir / f'{df_name}_start.parquet')
     os.remove(df_dir / f'{df_name}_target.parquet')
-    # Also remove the info.json file if it exists
+    # Also remove the info.json and individual info file if they exist
     info_path = df_dir / 'info.json'
     if info_path.exists():
         os.remove(info_path)
+    dataset_info_path = df_dir / f'{df_name}_info.json'
+    if dataset_info_path.exists():
+        os.remove(dataset_info_path)
     # also remove the directory if it is empty
     if not os.listdir(df_dir):
         os.rmdir(df_dir)
