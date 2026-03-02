@@ -31,6 +31,9 @@ The library includes the following synthetic datasets:
 - **`LunarLander`**: Lunar Lander game data with 404 features + 4 actions (4069 points)
 - **`MassSpec`**: Mass spectrometry data with 921 features + 512 labels (572 points)
 
+### Other models/datasets 
+There are other models, and the precise model set changes over time as we add/remove datasets. See the source code for the most up-to-date list of available datasets.
+
 ## Installation
 
 ### Using uv (Recommended)
