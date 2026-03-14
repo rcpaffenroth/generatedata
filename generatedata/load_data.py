@@ -6,6 +6,7 @@ import json
 import requests
 import generatedata.config
 import random
+import numpy as np
 
 DATA_URL = generatedata.config.DATA_URL
 
@@ -140,3 +141,55 @@ def load_data_as_xy_onehot(name: str, local: bool = False, data_dir: Path | str 
     return data["target"].iloc[:, : info["x_y_index"]], data["target"].iloc[
         :, info["x_y_index"] :
     ]
+
+
+def load_data_as_sequence(
+    name: str,
+    local: bool = False,
+    data_dir: Path | str | None = None,
+    label_every_step: bool = True,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Load a sequence dataset and reshape it into (num_points, seq_len, step_size).
+
+    Args:
+        name (str): the name of the dataset
+        local (bool): if True, load from local data directory
+        data_dir (Path | str | None): override the default data directory
+        label_every_step (bool): if True, broadcast labels across all timesteps
+            and concatenate with pixel sequence; if False, return pixels only
+
+    Returns:
+        tuple: (X_seq, labels) where X_seq is a numpy array of shape
+            (num_points, seq_len, step_size + label_dim) when label_every_step=True,
+            or (num_points, seq_len, step_size) when label_every_step=False,
+            and labels has shape (num_points, label_dim).
+    """
+    data = load_data(name, local=local, data_dir=data_dir)
+    info = data["info"]
+
+    if "seq_len" not in info or "step_size" not in info:
+        raise ValueError(
+            f"Dataset '{name}' has no sequence metadata (seq_len / step_size). "
+            f"Use load_data_as_xy() instead, or load a sequence variant such as '{name}_seq1'."
+        )
+
+    seq_len = info["seq_len"]
+    step_size = info["step_size"]
+    x_y_index = info["x_y_index"]
+
+    target_df = data["target"]
+    num_points = len(target_df)
+
+    pixels = target_df.iloc[:, :x_y_index].to_numpy()   # (num_points, total_pixels)
+    labels = target_df.iloc[:, x_y_index:].to_numpy()   # (num_points, label_dim)
+    label_dim = labels.shape[1]
+
+    X_seq = pixels.reshape(num_points, seq_len, step_size)
+
+    if label_every_step:
+        labels_broadcast = np.broadcast_to(
+            labels[:, np.newaxis, :], (num_points, seq_len, label_dim)
+        ).copy()
+        X_seq = np.concatenate([X_seq, labels_broadcast], axis=2)
+
+    return X_seq, labels
