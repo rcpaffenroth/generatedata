@@ -185,6 +185,7 @@ def mnist1d_save_data(
     mnist1d_dataset: dict,
     vector_dim: int = 40,
     additional_info: dict | None = None,
+    pixels_per_step: int | None = None,
 ) -> None:
     """
     Save MNIST1D data in the required format for experiments.
@@ -195,6 +196,7 @@ def mnist1d_save_data(
         mnist1d_dataset: Loaded MNIST1D dataset.
         vector_dim: Feature dimension.
         additional_info: Optional metadata to save.
+        pixels_per_step: Features consumed per timestep; if set, writes sequence metadata.
     """
     digit_tensors = []
     for i in range(num_points):
@@ -208,8 +210,10 @@ def mnist1d_save_data(
     x_off[:, -10:] = 0.1
     start_data = {f'x{i}': x_off[:,i] for i in range(x_off.shape[1])}
     target_data = {f'x{i}': x_on[:,i] for i in range(x_on.shape[1])}
-    save_data(data_dir, name, start_data, target_data, 
-                x_y_index=vector_dim, onehot_y=True, additional_info=additional_info)
+    seq_len = vector_dim // pixels_per_step if pixels_per_step is not None else None
+    save_data(data_dir, name, start_data, target_data,
+                x_y_index=vector_dim, onehot_y=True, additional_info=additional_info,
+                seq_len=seq_len, step_size=pixels_per_step)
 
 def generate_mnist1d(data_dir: Path, num_points: int = 1000) -> None:
     """
@@ -271,6 +275,7 @@ def mnist_save_data(
     mnist_dataset,
     vector_dim: int = 28 * 28,
     additional_info: dict | None = None,
+    pixels_per_step: int | None = None,
 ) -> None:
     """
     Save MNIST-like data (including EMNIST, KMNIST, FashionMNIST) in the required format.
@@ -281,6 +286,7 @@ def mnist_save_data(
         mnist_dataset: Loaded torchvision dataset.
         vector_dim: Feature dimension.
         additional_info: Optional metadata to save.
+        pixels_per_step: Features consumed per timestep; if set, writes sequence metadata.
     """
     digit_tensors = []
     label_dim = mnist_dataset.targets.max()+1
@@ -296,7 +302,9 @@ def mnist_save_data(
     x_off[:, -label_dim:] = 1.0/label_dim
     start_data = {f'x{i}': x_off[:, i] for i in range(x_off.shape[1])}
     target_data = {f'x{i}': x_on[:, i] for i in range(x_on.shape[1])}
-    save_data(data_dir, name, start_data, target_data, x_y_index=vector_dim, onehot_y=True, additional_info=additional_info)
+    seq_len = vector_dim // pixels_per_step if pixels_per_step is not None else None
+    save_data(data_dir, name, start_data, target_data, x_y_index=vector_dim, onehot_y=True,
+              additional_info=additional_info, seq_len=seq_len, step_size=pixels_per_step)
     
 def generate_mnist(data_dir: Path, num_points: int = 1000) -> None:
     """
@@ -359,7 +367,66 @@ def generate_mnist_custom(
         mnist_dataset = dataset_cls(root=str(data_dir.parent.parent / 'data' / 'external'), train=True, download=True, transform=transform)
     name = f"{dataset_name}_custom_degrees{degrees[0]}_{degrees[1]}_translate{translate[0]}_{translate[1]}_scale{scale[0]}_{scale[1]}"
     mnist_save_data(data_dir, name, num_points, mnist_dataset, vector_dim=50*50, additional_info=additional_info)
-               
+
+def generate_mnist1d_sequence(
+    data_dir: Path,
+    num_points: int = 1000,
+    pixels_per_step: int = 1,
+) -> None:
+    """Generate an MNIST1D dataset laid out as a time series.
+
+    Downloads the standard MNIST1D dataset and stores it with sequence metadata
+    so that load_data_as_sequence() can reshape it to
+    (num_points, seq_len, pixels_per_step).
+
+    Args:
+        data_dir: Path to save the data.
+        num_points: Number of samples.
+        pixels_per_step: Features consumed per timestep (default 1).
+    """
+    url = 'https://github.com/greydanus/mnist1d/raw/master/mnist1d_data.pkl'
+    r = requests.get(url, allow_redirects=True)
+    arg_dict = {'data_family': "MNIST1D"}
+    mnist1d_dataset = pickle.loads(r.content)
+    name = f"MNIST1D_seq{pixels_per_step}"
+    mnist1d_save_data(data_dir, name, num_points, mnist1d_dataset,
+                      additional_info=arg_dict, pixels_per_step=pixels_per_step)
+
+def generate_mnist_sequence(
+    data_dir: Path,
+    num_points: int = 1000,
+    pixels_per_step: int = 1,
+    dataset_name: str = "MNIST",
+) -> None:
+    """Generate a torchvision MNIST-family dataset laid out as a time series.
+
+    Stores data with sequence metadata so that load_data_as_sequence() can
+    reshape it to (num_points, seq_len, pixels_per_step).
+
+    Args:
+        data_dir: Path to save the data.
+        num_points: Number of samples.
+        pixels_per_step: Features consumed per timestep (default 1).
+        dataset_name: One of 'MNIST', 'EMNIST', 'KMNIST', 'FashionMNIST'.
+    """
+    transform = transforms.Compose([
+        transforms.ToTensor(),
+        transforms.Normalize((0.5,), (0.5,))
+    ])
+    arg_dict = {'data_family': dataset_name}
+    dataset_cls = getattr(datasets, dataset_name)
+    if dataset_name == "MNIST":
+        datasets.MNIST.mirrors = [
+            'https://ossci-datasets.s3.amazonaws.com/mnist/'
+        ]
+    if dataset_name == "EMNIST":
+        mnist_dataset = dataset_cls(root=str(data_dir.parent.parent / 'data' / 'external'), train=True, download=True, transform=transform, split="letters")
+    else:
+        mnist_dataset = dataset_cls(root=str(data_dir.parent.parent / 'data' / 'external'), train=True, download=True, transform=transform)
+    name = f"{dataset_name}_seq{pixels_per_step}"
+    mnist_save_data(data_dir, name, num_points, mnist_dataset,
+                    vector_dim=28*28, additional_info=arg_dict, pixels_per_step=pixels_per_step)
+
 def generate_emlocalization(data_dir: Path) -> None:
     """
     Generate the Electric Field Range Localization dataset from raw files.
@@ -437,6 +504,8 @@ def generate_all(data_dir: Path, all: bool) -> None:
         ('manifold',        lambda: generate_manifold(data_dir), {'num_points': 1000}),
         ('MNIST1D',         lambda: generate_mnist1d(data_dir), {'num_points': 1000}),
         ('MNIST',           lambda: generate_mnist(data_dir), {'num_points': 1000}),
+        ('MNIST1D_seq1',    lambda: generate_mnist1d_sequence(data_dir), {'num_points': 1000}),
+        ('MNIST_seq1',      lambda: generate_mnist_sequence(data_dir), {'num_points': 1000}),
         ('EMlocalization',  lambda: generate_emlocalization(data_dir), None),
         ('LunarLander',     lambda: generate_lunarlander(data_dir), None),
         ('MassSpec',        lambda: generate_massspec(data_dir), None),
