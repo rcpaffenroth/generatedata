@@ -10,8 +10,6 @@ def save_data(
     x_y_index: int | None = None,
     onehot_y: bool = False,
     additional_info: dict | None = None,
-    seq_len: int | None = None,
-    step_size: int | None = None,
 ) -> None:
     """ Save data to parquet files and update info.json.  
 
@@ -45,14 +43,6 @@ def save_data(
             data_info['onehot_y'] = 1
         else:
             data_info['onehot_y'] = 0
-        if seq_len is not None and step_size is not None:
-            if seq_len * step_size != x_y_index:
-                raise ValueError(
-                    f"seq_len ({seq_len}) * step_size ({step_size}) = {seq_len * step_size} "
-                    f"must equal x_y_index ({x_y_index})."
-                )
-            data_info['seq_len'] = seq_len
-            data_info['step_size'] = step_size
 
     if additional_info is not None:
         if isinstance(additional_info, dict):
