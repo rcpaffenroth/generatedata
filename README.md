@@ -10,33 +10,37 @@ This library provides a collection of synthetic datasets that represent start-ta
 - Benchmarking denoising methods
 - Evaluating manifold learning techniques
 - Dynamical systems modeling and analysis
+- Time-series / sequence modeling (via the `load_data_as_sequence` API)
 
 ## Available Datasets
 
-The library includes the following synthetic datasets:
-
 ### 2D Geometric Datasets
-- **`regression_line`**: Noisy points projected onto a line (1000 points)
-- **`pca_line`**: Points scattered around a line in 2D space (1000 points)  
-- **`circle`**: Points near a unit circle with radial noise (1000 points)
-- **`regression_circle`**: Points on a circle with added y-axis noise (1000 points)
+
+- **`regression_line`**: Noisy points projected onto a line (1000 points, 2 dims)
+- **`pca_line`**: Points scattered around a line in 2D space (1000 points, 2 dims)
+- **`circle`**: Points near a unit circle with radial noise (1000 points, 2 dims)
+- **`regression_circle`**: Points on a circle with added y-axis noise (1000 points, 2 dims)
 
 ### Higher-Dimensional Datasets
-- **`manifold`**: 3D manifold data (1000 points)
-- **`MNIST1D`**: 1D MNIST-like data with 40 features + 10 labels (4000 points)
-- **`MNIST`**: Standard MNIST digits with 784 features + 10 labels (1000 points)
+
+- **`manifold`**: 3D Swiss roll manifold data (1000 points, 3 dims)
+- **`MNIST1D`**: 1D MNIST-like data (1000 points, 40 features + 10 one-hot labels)
+- **`MNIST1Dcustom_*`**: Custom MNIST1D variants with configurable scale, translation, correlated noise, IID noise, and shear transforms (1000 points, 40 features + 10 labels)
+- **`MNIST`**: Standard MNIST digits (1000 points, 784 features + 10 one-hot labels)
+- **`MNIST_custom_*`**: Custom MNIST variants resized to 50×50 with configurable rotation, translation, scaling, and random erasing transforms (1000 points, 2500 features + 10 labels)
 
 ### Real-World Datasets
-- **`EMlocalization`**: Electromagnetic localization data with 160 features + 1 label (3260 points)
-- **`LunarLander`**: Lunar Lander game data with 404 features + 4 actions (4069 points)
-- **`MassSpec`**: Mass spectrometry data with 921 features + 512 labels (572 points)
 
-### Other models/datasets 
-There are other models, and the precise model set changes over time as we add/remove datasets. See the source code for the most up-to-date list of available datasets.
+- **`EMlocalization`**: Electromagnetic localization data (3260 points, 160 features + 1 label)
+- **`LunarLander`**: Lunar Lander game state data (4069 points, 404 features + 4 actions)
+- **`MassSpec`**: Mass spectrometry data (572 points, 921 features + 512 labels)
+
+When the full parameter sweep is enabled (`generate_all(..., all=True)`), the library generates hundreds of MNIST custom and MNIST1D custom variants across grids of transform parameters — including EMNIST and FashionMNIST families.
 
 ## Installation
 
 ### Using uv (Recommended)
+
 ```bash
 git clone <repository-url>
 cd generatedata
@@ -44,6 +48,7 @@ uv sync
 ```
 
 ### Using uv with development dependencies
+
 ```bash
 git clone <repository-url>
 cd generatedata
@@ -67,6 +72,48 @@ start_points = data['start']  # Noisy/perturbed data
 target_points = data['target']  # Clean data on manifold
 info = data['info']  # Dataset metadata
 ```
+
+### Loading as Features / Labels
+
+For supervised learning tasks, datasets with an `x_y_index` split can be loaded directly as `(X, Y)` pairs:
+
+```python
+from generatedata.load_data import load_data_as_xy, load_data_as_xy_onehot
+
+# Continuous labels
+X, Y = load_data_as_xy('EMlocalization')
+
+# One-hot encoded labels
+X, Y = load_data_as_xy_onehot('MNIST')
+```
+
+### Loading as Sequences (Time-Series)
+
+Any dataset with `x_y_index` metadata can be reshaped into a time-series at load time — no special datasets need to be generated:
+
+```python
+from generatedata.load_data import load_data_as_sequence
+
+# Reshape MNIST into a sequence: one pixel per timestep → seq_len=784
+X_seq, labels = load_data_as_sequence('MNIST', step_size=1)
+# X_seq shape: (1000, 784, 11)  — 784 timesteps, 1 pixel + 10 label dims per step
+# labels shape: (1000, 10)
+
+# One row per timestep → seq_len=28
+X_seq, labels = load_data_as_sequence('MNIST', step_size=28)
+# X_seq shape: (1000, 28, 38)  — 28 timesteps, 28 pixels + 10 label dims per step
+
+# Pixels only (no label broadcast)
+X_seq, labels = load_data_as_sequence('MNIST', step_size=28, label_every_step=False)
+# X_seq shape: (1000, 28, 28)  — just pixels
+```
+
+Key points:
+
+- `step_size` controls how many feature values form one timestep
+- `seq_len` is computed as `x_y_index // step_size` (must divide evenly)
+- `label_every_step=True` (default) broadcasts labels to every timestep and concatenates them
+- `label_every_step=False` returns pixels only; labels are returned separately
 
 ### Using with PyTorch
 
@@ -103,6 +150,19 @@ data = load_data.load_data('MNIST', local=True)
 data = load_data.load_data('MNIST', local=False)
 ```
 
+## Custom Dataset Transforms
+
+The MNIST custom generator supports these torchvision v2 transforms:
+
+| Parameter | Description | Default |
+| --- | --- | --- |
+| `degrees` | Rotation range `(min, max)` | `(0, 0)` |
+| `translate` | Translation range `(min, max)` as fraction of image size | `(0, 0)` |
+| `scale` | Scaling range `(min, max)` | `(1, 1)` |
+| `random_erasing_prob` | Probability of random erasing augmentation | `0.0` |
+
+Images are resized to 50×50, grayscaled, and normalized before transform application. The MNIST1D custom generator offers `scale_coeff`, `max_translation`, `corr_noise_scale`, `iid_noise_scale`, and `shear_scale` parameters.
+
 ## Data Format
 
 All datasets follow a consistent format:
@@ -115,17 +175,19 @@ All datasets follow a consistent format:
   - `x_y_index`: Split index for features/labels (if applicable)
   - `x_size`: Number of input features
   - `y_size`: Number of output labels
+  - `onehot_y`: Whether labels are one-hot encoded
 
 ## Repository Structure
 
 ```
 generatedata/
 ├── generatedata/           # Main library code
-│   ├── load_data.py       # Data loading functions
+│   ├── load_data.py       # Data loading (flat, X/Y, sequence)
 │   ├── save_data.py       # Data saving utilities
+│   ├── data_generators.py # All dataset generators + transforms
 │   ├── StartTargetData.py # PyTorch dataset class
 │   ├── df_to_tensor.py    # DataFrame to tensor conversion
-│   └── config.py          # Configuration settings
+│   └── config.py          # Configuration (data URL, etc.)
 ├── scripts/               # Data generation scripts
 ├── notebooks/             # Example notebooks
 ├── tests/                 # Test suite
@@ -137,43 +199,50 @@ generatedata/
 
 ## Development
 
-
 ### Running Tests
+
 ```bash
 uv run pytest
 ```
 
 ### Generating Data Locally
+
 The main entry point for generating all datasets is:
+
 ```bash
 uv run python scripts/generatedata_local.py
 ```
+
 This script will generate all supported datasets and place them in the `data/processed/` directory. You can customize which datasets are generated by editing `scripts/generatedata_local.py`.
 
 #### Advanced: Generate Individual Datasets
+
 The core dataset generation functions are in `generatedata/data_generators.py`. Each function generates a specific dataset and can be called directly for custom workflows. Example (from Python):
+
 ```python
 from generatedata.data_generators import generate_circle
 from pathlib import Path
 generate_circle(Path('data/processed/'), num_points=2000)
 ```
+
 See the source for available generators: `generate_regression_line`, `generate_pca_line`, `generate_circle`, `generate_regression_circle`, `generate_manifold`, `generate_mnist1d`, `generate_mnist1d_custom`, `generate_mnist`, `generate_mnist_custom`, `generate_emlocalization`, `generate_lunarlander`, `generate_massspec`, and `generate_all`.
 
 #### Copying Data to HTTP-Served Directory
+
 To make generated data available via HTTP (e.g., for remote loading), use:
+
 ```bash
 ./scripts/copy_data_to_http.sh /path/to/http/dir
 ```
+
 This will copy all processed data to the specified directory. Ensure you have write permissions and that your web server is configured to serve from this location.
 
-
 ### Example Notebooks
+
 - `notebooks/1-rcp-visualize-data.ipynb`: Visualization examples and data exploration patterns.
-- `notebooks/2-rcp-scikit-learn.ipynb`: Demonstrates how to use the output of `load_data_as_xy` and `load_data_as_xy_onehot` with scikit-learn RandomForest models for both regression and classification tasks. Includes:
-  - Loading features and targets for regression/classification
-  - Converting one-hot labels to class indices for classification
-  - Training and evaluating RandomForestRegressor and RandomForestClassifier
-  - Example code for integrating generatedata datasets with standard ML workflows
+- `notebooks/2-rcp-scikit-learn.ipynb`: Integration with scikit-learn RandomForest models for regression and classification tasks.
+- `notebooks/3-rcp-load_data.ipynb`: Demonstrates the `load_data` API and dataset metadata.
+- `notebooks/4-rcp-timeseries-datasets.ipynb`: Interactive sequence builder — step-by-step pixel reveal, heatmap visualisation, and a complete LSTM classifier training example using `load_data_as_sequence`.
 
 ## License
 
