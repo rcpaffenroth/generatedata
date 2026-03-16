@@ -9,7 +9,8 @@ import torch
 import requests
 import pickle
 from pathlib import Path
-from torchvision import datasets, transforms
+from torchvision import datasets
+import torchvision.transforms.v2 as transforms
 from generatedata.save_data import save_data
 import mnist1d
 
@@ -327,6 +328,7 @@ def generate_mnist_custom(
     degrees: tuple[int, int] = (0, 0),
     translate: tuple[float, float] = (0, 0),
     scale: tuple[float, float] = (1, 1),
+    random_erasing_prob: float = 0.0,    
 ) -> None:
     """
     Generate a custom MNIST-like dataset (MNIST, EMNIST, KMNIST, FashionMNIST) with affine transforms.
@@ -337,6 +339,7 @@ def generate_mnist_custom(
         degrees: Rotation range for RandomAffine.
         translate: Translation range for RandomAffine.
         scale: Scaling range for RandomAffine.
+        random_erasing_prob: Probability of applying RandomErasing.
     """
     dataset_cls = getattr(datasets, dataset_name)
     transform = transforms.Compose([
@@ -344,6 +347,7 @@ def generate_mnist_custom(
         transforms.Resize((50, 50)),
         transforms.Grayscale(num_output_channels=1),
         transforms.Normalize((0.5,), (0.5,)),
+        transforms.RandomErasing(p=random_erasing_prob),
         transforms.RandomAffine(degrees=degrees, translate=translate, scale=scale)
     ])
     additional_info = {
@@ -351,13 +355,18 @@ def generate_mnist_custom(
         'dataset_name': dataset_name,
         'degrees': degrees,
         'translate': translate,
-        'scale': scale
+        'scale': scale,
+        'random_erasing_prob': random_erasing_prob
     }
+    # This is a more stable version of MNIST downloading that uses the S3 mirror instead of the original MNIST server, which is often down.
+    datasets.MNIST.mirrors = [
+       'https://ossci-datasets.s3.amazonaws.com/mnist/'
+    ]
     if dataset_name == "EMNIST":
         mnist_dataset = dataset_cls(root=str(data_dir.parent.parent / 'data' / 'external'), train=True, download=True, transform=transform, split="letters")
     else:
         mnist_dataset = dataset_cls(root=str(data_dir.parent.parent / 'data' / 'external'), train=True, download=True, transform=transform)
-    name = f"{dataset_name}_custom_degrees{degrees[0]}_{degrees[1]}_translate{translate[0]}_{translate[1]}_scale{scale[0]}_{scale[1]}"
+    name = f"{dataset_name}_custom_degrees{degrees[0]}_{degrees[1]}_translate{translate[0]}_{translate[1]}_scale{scale[0]}_{scale[1]}_randomerasing_{random_erasing_prob}"
     mnist_save_data(data_dir, name, num_points, mnist_dataset, vector_dim=50*50, additional_info=additional_info)
                
 def generate_emlocalization(data_dir: Path) -> None:
@@ -483,10 +492,12 @@ def generate_all(data_dir: Path, all: bool) -> None:
         l1_range = np.arange(0, 91, 45)
         l2_range = np.arange(0, 1.01, 0.5)
         l3_range = np.arange(0.5, 1.01, 0.25)
+        l4_range = [0.0, 0.5, 1.0]
     else:
         l1_range = [0]
         l2_range = [0]
         l3_range = [1]
+        l4_range = [1.0]
     if all:
         # FIXME: As of 2/27/2026 KMNIST server seems to be down.  Once the server is back up, we can re-enable the full sweep.
         # dataset_names = ['MNIST', 'EMNIST', 'KMNIST', 'FashionMNIST']
@@ -495,24 +506,26 @@ def generate_all(data_dir: Path, all: bool) -> None:
         dataset_names = ['MNIST']
 
     for dataset_name in dataset_names:
-        for l1, l2, l3 in product(l1_range, l2_range, l3_range):
+        for l1, l2, l3, l4 in product(l1_range, l2_range, l3_range, l4_range):
             degrees = (0, int(l1))
             translate = (0, l2)
             scale = (l3, 1)
+            random_erasing_prob = l4
             name = (f"{dataset_name}_custom_degrees{degrees[0]}_{degrees[1]}"
-                    f"_translate{translate[0]}_{translate[1]}_scale{scale[0]}_{scale[1]}")
+                    f"_translate{translate[0]}_{translate[1]}_scale{scale[0]}_{scale[1]}_randomerasing_{random_erasing_prob}")
             
             expected_params = {'num_points': 1000}
             
             if dataset_exists(data_dir, name, expected_params):
                 print(f'Skipping {name} (already exists)')
             else:
-                print(dataset_name, l1, l2, l3)
+                print(dataset_name, l1, l2, l3, l4)
                 generate_mnist_custom(data_dir,
                                       dataset_name=dataset_name,
                                       degrees=degrees,
                                       translate=translate,
-                                      scale=scale)   
+                                      scale=scale,
+                                      random_erasing_prob=random_erasing_prob)
 
     # Finally, compile all the individual info files into a single info.json
     compile_info_json(data_dir)
