@@ -1,3 +1,28 @@
+## [v0.4.0] - 2026-03-16
+
+### Added
+- `load_data_as_sequence()` function in `load_data.py` — reshapes any flat dataset
+  with `x_y_index` metadata into time-series format `(num_points, seq_len, step_size)`
+  at load time, with configurable `step_size` and `label_every_step` options
+- Random erasing transform (`random_erasing_prob`) for MNIST custom dataset generation,
+  enabling new augmented MNIST variants
+- S3 mirror fallback for MNIST downloads to handle unreliable upstream server
+- New notebook `notebooks/4-rcp-timeseries-datasets.ipynb` — interactive sequence
+  builder with step-by-step pixel reveal, heatmap visualisation, and a complete
+  LSTM classifier training example
+- Comprehensive test suite for sequence loading (`tests/test_timeseries.py`) covering
+  shape validation, label broadcasting, cross-dataset support, and error handling
+
+### Changed
+- Switched from `torchvision.transforms` to `torchvision.transforms.v2` in MNIST
+  custom data generation
+- Updated remote data URL to `20260316_115158` timestamp in `config.py`
+- MNIST1D default dataset size reduced from 4000 to 1000 points for consistency
+
+### Removed
+- Legacy Poetry configuration files (`poetry.lock`, etc.) — `uv` is now the sole
+  package manager
+
 ## [v0.3.2] - 2026-03-01
 
 ### Added

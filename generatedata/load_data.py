@@ -6,6 +6,8 @@ import json
 import requests
 import generatedata.config
 import random
+import numpy as np
+import numpy as np
 
 DATA_URL = generatedata.config.DATA_URL
 
@@ -140,3 +142,66 @@ def load_data_as_xy_onehot(name: str, local: bool = False, data_dir: Path | str 
     return data["target"].iloc[:, : info["x_y_index"]], data["target"].iloc[
         :, info["x_y_index"] :
     ]
+
+
+def load_data_as_sequence(
+    name: str,
+    step_size: int,
+    local: bool = False,
+    data_dir: Path | str | None = None,
+    label_every_step: bool = True,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Load any dataset with x_y_index and reshape it into a sequence.
+
+    The sequence length is computed as x_y_index // step_size.  This allows
+    any flat dataset to be treated as a time-series without storing sequence
+    metadata in info.json.
+
+    Args:
+        name: Dataset name.
+        step_size: Number of feature values per timestep.
+        local: If True, load from local processed data directory.
+        data_dir: Override the default data directory.
+        label_every_step: If True, broadcast labels across all timesteps
+            and concatenate with pixel sequence; if False, return pixels only.
+
+    Returns:
+        (X_seq, labels) where X_seq has shape
+        (num_points, seq_len, step_size [+ label_dim]) and
+        labels has shape (num_points, label_dim).
+
+    Raises:
+        ValueError: If x_y_index is missing or not divisible by step_size.
+    """
+    data = load_data(name, local=local, data_dir=data_dir)
+    info = data["info"]
+
+    if "x_y_index" not in info:
+        raise ValueError(
+            f"Dataset '{name}' has no x_y_index metadata. Cannot reshape as sequence."
+        )
+
+    x_y_index = info["x_y_index"]
+
+    if x_y_index % step_size != 0:
+        raise ValueError(
+            f"x_y_index ({x_y_index}) is not evenly divisible by step_size ({step_size})."
+        )
+
+    seq_len = x_y_index // step_size
+    target_df = data["target"]
+    num_points = len(target_df)
+
+    pixels = target_df.iloc[:, :x_y_index].to_numpy()   # (num_points, x_y_index)
+    labels = target_df.iloc[:, x_y_index:].to_numpy()   # (num_points, label_dim)
+    label_dim = labels.shape[1]
+
+    X_seq = pixels.reshape(num_points, seq_len, step_size)
+
+    if label_every_step:
+        labels_broadcast = np.broadcast_to(
+            labels[:, np.newaxis, :], (num_points, seq_len, label_dim)
+        ).copy()
+        X_seq = np.concatenate([X_seq, labels_broadcast], axis=2)
+
+    return X_seq, labels
