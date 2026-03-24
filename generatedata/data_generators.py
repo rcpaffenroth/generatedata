@@ -12,6 +12,13 @@ from pathlib import Path
 from torchvision import datasets
 import torchvision.transforms.v2 as transforms
 from generatedata.save_data import save_data
+from generatedata.lra_generators import (
+    generate_lra_listops,
+    generate_lra_image,
+    generate_lra_text,
+    generate_lra_pathfinder,
+    generate_lra_pathx,
+)
 import mnist1d
 
 
@@ -430,7 +437,7 @@ def generate_massspec(data_dir: Path) -> None:
     start_data.iloc[:, -512:] = 0.0
     save_data(data_dir, 'MassSpec', start_data, target_data, x_y_index=1433-512)
 
-def generate_all(data_dir: Path, all: bool) -> None:
+def generate_all(data_dir: Path, all: bool, lra: bool = False) -> None:
     """
     Generate all datasets (synthetic and real) and save them in the processed directory.
     Skips generation for any dataset whose parquet files already exist.
@@ -526,6 +533,21 @@ def generate_all(data_dir: Path, all: bool) -> None:
                                       translate=translate,
                                       scale=scale,
                                       random_erasing_prob=random_erasing_prob)
+
+    # ----- Long Range Arena (LRA) datasets -----
+    if lra:
+        lra_datasets = [
+            ('lra_listops',    lambda: generate_lra_listops(data_dir),    {'num_points': 10000}),
+            ('lra_pathfinder', lambda: generate_lra_pathfinder(data_dir), {'num_points': 10000}),
+            ('lra_pathx',      lambda: generate_lra_pathx(data_dir),      {'num_points': 2000}),
+            ('lra_image',      lambda: generate_lra_image(data_dir),      {'num_points': 10000}),
+            ('lra_text',       lambda: generate_lra_text(data_dir),       {'num_points': 10000}),
+        ]
+        for name, generator, expected_params in lra_datasets:
+            if dataset_exists(data_dir, name, expected_params):
+                print(f'Skipping {name} (already exists)')
+            else:
+                generator()
 
     # Finally, compile all the individual info files into a single info.json
     compile_info_json(data_dir)
