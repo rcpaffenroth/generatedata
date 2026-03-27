@@ -243,6 +243,8 @@ def generate_lra_listops(
         additional_info={
             "data_family": "LRA",
             "lra_task": "listops",
+            "is_sequence": True,
+            "default_step_size": 1,
             "sequence_length": seq_length,
             "num_classes": 10,
             "vocabulary_size": LISTOPS_VOCAB_SIZE,
@@ -420,6 +422,8 @@ def generate_lra_pathfinder(
         additional_info={
             "data_family": "LRA",
             "lra_task": "pathfinder",
+            "is_sequence": True,
+            "default_step_size": 1,
             "sequence_length": seq_length,
             "image_size": image_size,
             "num_classes": 2,
@@ -468,6 +472,8 @@ def generate_lra_pathx(
         additional_info={
             "data_family": "LRA",
             "lra_task": "pathx",
+            "is_sequence": True,
+            "default_step_size": 1,
             "sequence_length": seq_length,
             "image_size": image_size,
             "num_classes": 2,
@@ -529,6 +535,8 @@ def generate_lra_image(
         additional_info={
             "data_family": "LRA",
             "lra_task": "image",
+            "is_sequence": True,
+            "default_step_size": 1,
             "sequence_length": seq_length,
             "image_size": 32,
             "num_classes": 10,
@@ -647,6 +655,8 @@ def generate_lra_text(
         additional_info={
             "data_family": "LRA",
             "lra_task": "text",
+            "is_sequence": True,
+            "default_step_size": 1,
             "sequence_length": seq_length,
             "num_classes": 2,
             "source": "IMDB",
