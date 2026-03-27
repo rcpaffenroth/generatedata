@@ -1,10 +1,12 @@
 """Tests for Long Range Arena (LRA) dataset generators."""
 
 import json
+import warnings
 
 import numpy as np
 import pandas as pd
 import pytest
+from unittest.mock import patch
 
 from generatedata.lra_generators import (
     _listops_evaluate,
@@ -13,6 +15,11 @@ from generatedata.lra_generators import (
     generate_lra_pathx,
     generate_lra_image,
     generate_lra_text,
+)
+from generatedata.data_generators import compile_info_json
+from generatedata.load_data import (
+    load_data_as_xy_onehot,
+    load_data_as_sequence,
 )
 
 
@@ -64,6 +71,10 @@ def _check_dataset_files(data_dir, name, expected_seq_len, expected_num_classes,
     start_features = start_df.iloc[:, :expected_seq_len].to_numpy()
     target_features = target_df.iloc[:, :expected_seq_len].to_numpy()
     assert np.allclose(start_features, target_features), "Features differ between start and target"
+
+    # Sequence metadata checks — all LRA datasets are sequence datasets
+    assert info.get("is_sequence") is True, "LRA datasets must have is_sequence=True"
+    assert info.get("default_step_size") == 1, "LRA datasets must have default_step_size=1"
 
     return start_df, target_df, info
 
@@ -210,3 +221,46 @@ class TestSequenceLoading:
         seq_len_actual = x_y_index // step_size
         X_seq = features.reshape(features.shape[0], seq_len_actual, step_size)
         assert X_seq.shape == (20, 32, 32)
+
+
+# ---------------------------------------------------------------------------
+# Sequence-native loading behaviour
+# ---------------------------------------------------------------------------
+
+class TestSequenceNativeWarning:
+    """Verify that loading LRA data as flat X/Y emits a warning."""
+
+    def test_load_as_xy_onehot_warns(self, tmp_path):
+        generate_lra_listops(tmp_path, num_points=20, seq_length=128)
+        compile_info_json(tmp_path)
+        with patch("generatedata.load_data.data_names", return_value=["lra_listops"]):
+            with pytest.warns(UserWarning, match="sequence dataset"):
+                load_data_as_xy_onehot("lra_listops", local=True, data_dir=tmp_path)
+
+
+class TestDefaultStepSize:
+    """Verify that LRA datasets can be loaded as sequences without explicit step_size."""
+
+    def test_lra_default_step_size(self, tmp_path):
+        """LRA dataset with default_step_size can omit step_size argument."""
+        seq_len = 128
+        generate_lra_listops(tmp_path, num_points=20, seq_length=seq_len)
+        compile_info_json(tmp_path)
+        with patch("generatedata.load_data.data_names", return_value=["lra_listops"]):
+            X_seq, labels = load_data_as_sequence(
+                "lra_listops", local=True, data_dir=tmp_path, label_every_step=False,
+            )
+        # default_step_size=1, so each timestep has 1 feature
+        assert X_seq.shape == (20, seq_len, 1)
+        assert labels.shape == (20, 10)
+
+    def test_missing_step_size_and_no_default_raises(self, tmp_path):
+        """Dataset without default_step_size must raise ValueError when step_size omitted."""
+        from generatedata.save_data import save_data
+        rng = np.random.default_rng(42)
+        cols = {f"x{i}": rng.random(50) for i in range(20)}
+        save_data(tmp_path, "plain", cols, cols, x_y_index=10, onehot_y=True)
+        compile_info_json(tmp_path)
+        with patch("generatedata.load_data.data_names", return_value=["plain"]):
+            with pytest.raises(ValueError, match="No step_size provided"):
+                load_data_as_sequence("plain", local=True, data_dir=tmp_path)
