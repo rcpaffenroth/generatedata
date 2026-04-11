@@ -62,7 +62,7 @@ uv sync
 ```bash
 git clone <repository-url>
 cd generatedata
-uv sync --extra dev
+uv sync --group dev
 ```
 
 ## Usage
