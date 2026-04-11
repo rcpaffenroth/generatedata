@@ -726,7 +726,7 @@ dependencies = [
     { name = "torchvision" },
 ]
 
-[package.optional-dependencies]
+[package.dev-dependencies]
 dev = [
     { name = "jupytext" },
     { name = "nbmake" },
@@ -739,21 +739,24 @@ requires-dist = [
     { name = "ipykernel", specifier = ">=6.29,<6.30" },
     { name = "ipympl", specifier = ">=0.9,<0.10" },
     { name = "jupyterlab", specifier = ">=4.3,<4.4" },
-    { name = "jupytext", marker = "extra == 'dev'", specifier = ">=1.16,<1.17" },
     { name = "matplotlib", specifier = ">=3.9,<3.10" },
     { name = "mnist1d" },
-    { name = "nbmake", marker = "extra == 'dev'", specifier = ">=1.5,<1.6" },
     { name = "numpy", specifier = ">=2.1,<2.2" },
     { name = "pandas", specifier = ">=2.2,<2.3" },
     { name = "plotly", specifier = ">=5.24,<5.25" },
     { name = "pyarrow", specifier = ">=17,<18" },
-    { name = "pylint", marker = "extra == 'dev'", specifier = ">=3.2,<3.3" },
-    { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.3,<8.4" },
     { name = "scikit-learn", specifier = ">=1.6,<1.7" },
     { name = "torch", specifier = "==2.5.1" },
     { name = "torchvision", specifier = ">=0.20,<0.21" },
 ]
-provides-extras = ["dev"]
+
+[package.metadata.requires-dev]
+dev = [
+    { name = "jupytext", specifier = ">=1.16,<1.17" },
+    { name = "nbmake", specifier = ">=1.5,<1.6" },
+    { name = "pylint", specifier = ">=3.2,<3.3" },
+    { name = "pytest", specifier = ">=8.3,<8.4" },
+]
 
 [[package]]
 name = "h11"
