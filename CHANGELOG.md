@@ -1,3 +1,23 @@
+## [v0.4.1] - 2026-07-25
+
+### Added
+- `requests` declared as an explicit dependency — it is imported by `load_data.py`
+  and `data_generators.py` but was previously only available transitively
+- `anywidget` dependency — plotly >=6 moved `go.FigureWidget` behind it, which
+  `notebooks/4-rcp-timeseries-datasets.ipynb` requires
+
+### Changed
+- Loosened all dependency version ranges from tight minor-version pins to
+  lower bound + next-major cap (e.g. `torch==2.5.1` → `torch>=2.5,<3`,
+  `numpy>=2.1,<2.2` → `numpy>=2.1,<3`), so `generatedata` can be installed
+  alongside other projects without version conflicts.  The test suite was
+  verified at both the floor (`--resolution lowest-direct`) and the ceiling
+  (torch 2.13, numpy 2.2, pandas 2.3, plotly 6.9, scikit-learn 1.7)
+- The PyTorch CUDA index is now declared with `explicit = true` and routed only
+  to `torch`/`torchvision` via `[tool.uv.sources]`.  Previously it was the
+  default index for *every* package, which silently capped versions of anything
+  that index happens to mirror (notably `numpy`)
+
 ## [v0.4.0] - 2026-03-16
 
 ### Added
