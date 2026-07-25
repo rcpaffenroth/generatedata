@@ -6,7 +6,7 @@ import json
 import requests
 import generatedata.config
 import random
-import numpy as np
+import warnings
 import numpy as np
 
 DATA_URL = generatedata.config.DATA_URL
@@ -103,6 +103,14 @@ def load_data_as_xy(name: str, local: bool = False, data_dir: Path | str | None 
     """
     data = load_data(name, local=local, data_dir=data_dir)
     info = data["info"]
+    if info.get("is_sequence"):
+        warnings.warn(
+            f"Dataset '{name}' is a sequence dataset (data_family={info.get('data_family', 'unknown')}). "
+            f"Loading as flat X/Y returns padded fixed-size data. "
+            f"Consider using load_data_as_sequence() for dynamic-length sequence handling.",
+            UserWarning,
+            stacklevel=2,
+        )
     if "x_y_index" not in info or "x_size" not in info or "y_size" not in info:
         raise ValueError(
             f"Dataset {name} does not have the required keys in info.json: 'x_y_index', 'x_size', 'y_size'."
@@ -124,6 +132,14 @@ def load_data_as_xy_onehot(name: str, local: bool = False, data_dir: Path | str 
     """
     data = load_data(name, local=local, data_dir=data_dir)
     info = data["info"]
+    if info.get("is_sequence"):
+        warnings.warn(
+            f"Dataset '{name}' is a sequence dataset (data_family={info.get('data_family', 'unknown')}). "
+            f"Loading as flat X/Y returns padded fixed-size data. "
+            f"Consider using load_data_as_sequence() for dynamic-length sequence handling.",
+            UserWarning,
+            stacklevel=2,
+        )
     # Check if the required keys are present in the info.json
     if "onehot_y" not in info:
         raise ValueError(
@@ -146,7 +162,7 @@ def load_data_as_xy_onehot(name: str, local: bool = False, data_dir: Path | str 
 
 def load_data_as_sequence(
     name: str,
-    step_size: int,
+    step_size: int | None = None,
     local: bool = False,
     data_dir: Path | str | None = None,
     label_every_step: bool = True,
@@ -159,7 +175,9 @@ def load_data_as_sequence(
 
     Args:
         name: Dataset name.
-        step_size: Number of feature values per timestep.
+        step_size: Number of feature values per timestep.  When ``None``,
+            the value is read from ``default_step_size`` in the dataset's
+            metadata (set automatically for LRA sequence datasets).
         local: If True, load from local processed data directory.
         data_dir: Override the default data directory.
         label_every_step: If True, broadcast labels across all timesteps
@@ -171,10 +189,19 @@ def load_data_as_sequence(
         labels has shape (num_points, label_dim).
 
     Raises:
-        ValueError: If x_y_index is missing or not divisible by step_size.
+        ValueError: If x_y_index is missing, step_size cannot be resolved,
+            or x_y_index is not divisible by step_size.
     """
     data = load_data(name, local=local, data_dir=data_dir)
     info = data["info"]
+
+    if step_size is None:
+        step_size = info.get("default_step_size")
+        if step_size is None:
+            raise ValueError(
+                f"No step_size provided and dataset '{name}' has no "
+                f"default_step_size in metadata. Please pass step_size explicitly."
+            )
 
     if "x_y_index" not in info:
         raise ValueError(

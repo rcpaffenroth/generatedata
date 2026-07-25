@@ -177,3 +177,46 @@ class TestLoadDataAsSequence:
                 name, step_size=step_size, local=True, data_dir=tmp_path
             )
         assert X.shape[1] == x_y_index // step_size
+
+    def test_default_step_size_from_metadata(self, tmp_path):
+        """When step_size is omitted, default_step_size from metadata is used."""
+        name = "seq_ds"
+        _make_dataset(
+            tmp_path, name,
+            num_points=50,
+            num_features=40,
+            label_dim=10,
+            x_y_index=40,
+        )
+        # Patch the info JSON to include default_step_size
+        import json
+        info_path = tmp_path / f"{name}_info.json"
+        with open(info_path) as f:
+            info = json.load(f)
+        info["default_step_size"] = 10
+        info["is_sequence"] = True
+        with open(info_path, "w") as f:
+            json.dump(info, f)
+        compile_info_json(tmp_path)
+
+        with patch("generatedata.load_data.data_names", return_value=[name]):
+            X, labels = load_data_as_sequence(
+                name, local=True, data_dir=tmp_path
+            )
+        # step_size=10 from metadata, so 40/10 = 4 timesteps
+        assert X.shape == (50, 4, 20)  # 10 features + 10 labels per step
+        assert labels.shape == (50, 10)
+
+    def test_no_step_size_no_default_raises(self, tmp_path):
+        """Omitting step_size without default_step_size in metadata raises ValueError."""
+        name = "plain_ds"
+        _make_dataset(
+            tmp_path, name,
+            num_points=50,
+            num_features=40,
+            label_dim=10,
+            x_y_index=40,
+        )
+        with patch("generatedata.load_data.data_names", return_value=[name]):
+            with pytest.raises(ValueError, match="No step_size provided"):
+                load_data_as_sequence(name, local=True, data_dir=tmp_path)

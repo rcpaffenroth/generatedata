@@ -773,7 +773,7 @@ dependencies = [
     { name = "torchvision" },
 ]
 
-[package.optional-dependencies]
+[package.dev-dependencies]
 dev = [
     { name = "jupytext" },
     { name = "nbmake" },
@@ -787,22 +787,25 @@ requires-dist = [
     { name = "ipykernel", specifier = ">=6.29,<7" },
     { name = "ipympl", specifier = ">=0.9,<1" },
     { name = "jupyterlab", specifier = ">=4.3,<5" },
-    { name = "jupytext", marker = "extra == 'dev'", specifier = ">=1.16,<2" },
     { name = "matplotlib", specifier = ">=3.9,<4" },
     { name = "mnist1d", specifier = ">=0.0.2" },
-    { name = "nbmake", marker = "extra == 'dev'", specifier = ">=1.5,<2" },
     { name = "numpy", specifier = ">=2.1,<3" },
     { name = "pandas", specifier = ">=2.2,<3" },
     { name = "plotly", specifier = ">=5.24,<7" },
     { name = "pyarrow", specifier = ">=17" },
-    { name = "pylint", marker = "extra == 'dev'", specifier = ">=3.2,<4" },
-    { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0,<9" },
     { name = "requests", specifier = ">=2.28,<3" },
     { name = "scikit-learn", specifier = ">=1.6,<2" },
     { name = "torch", specifier = ">=2.5,<3", index = "https://download.pytorch.org/whl/cu121" },
     { name = "torchvision", specifier = ">=0.20,<1", index = "https://download.pytorch.org/whl/cu121" },
 ]
-provides-extras = ["dev"]
+
+[package.metadata.requires-dev]
+dev = [
+    { name = "jupytext", specifier = ">=1.16,<2" },
+    { name = "nbmake", specifier = ">=1.5,<2" },
+    { name = "pylint", specifier = ">=3.2,<4" },
+    { name = "pytest", specifier = ">=8.0,<9" },
+]
 
 [[package]]
 name = "h11"

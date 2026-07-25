@@ -12,6 +12,13 @@ from pathlib import Path
 from torchvision import datasets
 import torchvision.transforms.v2 as transforms
 from generatedata.save_data import save_data
+from generatedata.lra_generators import (
+    generate_lra_listops,
+    generate_lra_image,
+    generate_lra_text,
+    generate_lra_pathfinder,
+    generate_lra_pathx,
+)
 import mnist1d
 
 
@@ -449,6 +456,12 @@ def generate_all(data_dir: Path, all: bool) -> None:
         ('EMlocalization',  lambda: generate_emlocalization(data_dir), None),
         ('LunarLander',     lambda: generate_lunarlander(data_dir), None),
         ('MassSpec',        lambda: generate_massspec(data_dir), None),
+        # Long Range Arena (LRA) sequence datasets
+        ('lra_listops',    lambda: generate_lra_listops(data_dir),    {'num_points': 10000}),
+        ('lra_pathfinder', lambda: generate_lra_pathfinder(data_dir), {'num_points': 10000}),
+        ('lra_pathx',      lambda: generate_lra_pathx(data_dir),      {'num_points': 2000}),
+        ('lra_image',      lambda: generate_lra_image(data_dir),      {'num_points': 10000}),
+        ('lra_text',       lambda: generate_lra_text(data_dir),       {'num_points': 10000}),
     ]
 
     for name, generator, expected_params in data_sets:
