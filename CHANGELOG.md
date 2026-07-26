@@ -8,11 +8,11 @@
 - `pillow` declared as an explicit dependency — now imported directly to decode
   the PNG-encoded images in HuggingFace parquet files, where previously it was
   only available transitively via `torchvision`
-- KMNIST restored to the `all=True` dataset sweep, undoing its removal in v0.4.0.
-  It now loads from the pinned HuggingFace mirror rather than
-  `codh.rois.ac.jp`; the mirror was verified byte-identical to the official
-  idx-ubyte files (same 60000 rows in the same order, identical labels), and the
-  resulting tensors are bit-exact against `torchvision.datasets.KMNIST`
+- KMNIST restored to the `all=True` dataset sweep, undoing its removal in v0.3.2.
+  It now loads from a pinned HuggingFace mirror rather than `codh.rois.ac.jp`;
+  the mirror was verified byte-identical to the official idx-ubyte files (same
+  60000 rows in the same order, identical labels), and the resulting tensors are
+  bit-exact against `torchvision.datasets.KMNIST`
 - `generatedata/hf_data.py` — `download_hf_parquet()` for cached, revision-pinned
   downloads from the HuggingFace Hub, and `HFImageDataset`, a small
   torchvision-style wrapper over a HuggingFace image/label parquet file
@@ -47,7 +47,8 @@
   at load time, with configurable `step_size` and `label_every_step` options
 - Random erasing transform (`random_erasing_prob`) for MNIST custom dataset generation,
   enabling new augmented MNIST variants
-- S3 mirror fallback for MNIST downloads to handle unreliable upstream server
+- MNIST downloads pinned to the `ossci-datasets` S3 mirror, replacing torchvision's
+  default mirror list so the often-unavailable `yann.lecun.com` is never tried
 - New notebook `notebooks/4-rcp-timeseries-datasets.ipynb` — interactive sequence
   builder with step-by-step pixel reveal, heatmap visualisation, and a complete
   LSTM classifier training example
