@@ -14,15 +14,15 @@ https://github.com/google-research/long-range-arena
 
 import io
 import json
-import tarfile
 import random
 from pathlib import Path
 
 import numpy as np
-import requests
+import pyarrow.parquet as pq
 import torch
-from torchvision import datasets as tv_datasets
+from PIL import Image
 
+from generatedata.hf_data import download_hf_parquet
 from generatedata.save_data import save_data
 
 
@@ -487,6 +487,10 @@ def generate_lra_pathx(
 # Image (CIFAR-10)
 # =============================================================================
 
+_CIFAR10_REPO = "uoft-cs/cifar10"
+_CIFAR10_REVISION = "0b2714987fa478483af9968de7c934580d0bb9a2"
+_CIFAR10_TRAIN = "plain_text/train-00000-of-00001.parquet"
+
 
 def generate_lra_image(
     data_dir: Path,
@@ -495,28 +499,39 @@ def generate_lra_image(
 ) -> None:
     """Generate the LRA Image dataset from CIFAR-10.
 
-    Downloads CIFAR-10 via torchvision, converts to grayscale, flattens
-    each 32x32 image in raster-scan order to produce sequences of length
-    1024 with 10-class labels.
+    Downloads the CIFAR-10 training split from the HuggingFace Hub, converts
+    each image to grayscale, and flattens the 32x32 pixels in raster-scan order
+    to produce sequences of length 1024 with 10-class labels.
 
     Args:
         data_dir: Output directory.
-        num_points: Number of samples.
+        num_points: Number of samples, drawn with replacement from the 50000
+            training images.
         seed: Random seed.
     """
     rng = np.random.default_rng(seed)
 
-    # Download CIFAR-10 (raw PIL images, no transform)
-    external_dir = str(Path(data_dir).parent.parent / "data" / "external")
-    cifar = tv_datasets.CIFAR10(root=external_dir, train=True, download=True)
+    parquet_path = download_hf_parquet(
+        Path(data_dir).parent.parent / "data" / "external" / "cifar10",
+        _CIFAR10_REPO,
+        _CIFAR10_REVISION,
+        _CIFAR10_TRAIN,
+    )
+    # Each row holds a PNG-encoded image (as a {bytes, path} struct) and an
+    # integer label.  Sample the row indices first so that only the rows we
+    # actually need are materialised in memory.
+    table = pq.read_table(parquet_path, columns=["img", "label"])
+    indices = rng.integers(0, table.num_rows, size=num_points)
+    sampled = table.take(indices)
+    images = sampled.column("img").to_pylist()
+    sampled_labels = sampled.column("label").to_pylist()
 
     seq_length = 32 * 32
     features = np.empty((num_points, seq_length), dtype=np.float32)
     labels = np.empty(num_points, dtype=np.int64)
 
-    indices = rng.integers(0, len(cifar), size=num_points)
-    for i, idx in enumerate(indices):
-        img, label = cifar[int(idx)]
+    for i, (record, label) in enumerate(zip(images, sampled_labels)):
+        img = Image.open(io.BytesIO(record["bytes"]))
         # img is a PIL Image (RGB) — convert to numpy
         img_arr = np.array(img, dtype=np.float32)  # (32, 32, 3)
         # Convert to grayscale: 0.2989*R + 0.5870*G + 0.1140*B
@@ -550,7 +565,12 @@ def generate_lra_image(
 # Text (IMDB)
 # =============================================================================
 
-_IMDB_URL = "https://ai.stanford.edu/~amaas/data/sentiment/aclImdb_v1.tar.gz"
+_IMDB_REPO = "stanfordnlp/imdb"
+_IMDB_REVISION = "e6281661ce1c48d982bc483cf8a173c1bbeb5d31"
+_IMDB_SPLITS = (
+    "plain_text/train-00000-of-00001.parquet",
+    "plain_text/test-00000-of-00001.parquet",
+)
 
 
 def _download_and_parse_imdb(
@@ -564,59 +584,29 @@ def _download_and_parse_imdb(
     Returns (features, labels) where features has shape (num_points, seq_length)
     and labels has shape (num_points,).
     """
-    cache_dir = Path(cache_dir)
-    cache_dir.mkdir(parents=True, exist_ok=True)
-    tarball_path = cache_dir / "aclImdb_v1.tar.gz"
-
-    # Download if not cached
-    if not tarball_path.exists():
-        print(f"Downloading IMDB dataset from {_IMDB_URL} ...")
-        resp = requests.get(_IMDB_URL, stream=True, timeout=300)
-        resp.raise_for_status()
-        with open(tarball_path, "wb") as f:
-            for chunk in resp.iter_content(chunk_size=1 << 20):
-                f.write(chunk)
-        print("Download complete.")
-
-    # Parse the tarball: read pos/ and neg/ review text files from train split
+    # Use both the train and test splits (25000 reviews each) to have enough
+    # data.  Labels are already encoded as 0 = negative, 1 = positive.
     texts: list[str] = []
     text_labels: list[int] = []
-
-    with tarfile.open(tarball_path, "r:gz") as tar:
-        for member in tar.getmembers():
-            if not member.isfile():
-                continue
-            # Use both train and test splits to have enough data
-            parts = member.name.split("/")
-            # Expect: aclImdb/{train,test}/{pos,neg}/XXXX_Y.txt
-            if len(parts) < 4:
-                continue
-            split = parts[1]  # train or test
-            sentiment = parts[2]  # pos or neg
-            if split not in ("train", "test"):
-                continue
-            if sentiment not in ("pos", "neg"):
-                continue
-            f = tar.extractfile(member)
-            if f is None:
-                continue
-            text = f.read().decode("utf-8", errors="replace")
-            texts.append(text)
-            text_labels.append(1 if sentiment == "pos" else 0)
+    for filename in _IMDB_SPLITS:
+        parquet_path = download_hf_parquet(
+            cache_dir, _IMDB_REPO, _IMDB_REVISION, filename
+        )
+        table = pq.read_table(parquet_path, columns=["text", "label"])
+        texts.extend(table.column("text").to_pylist())
+        text_labels.extend(table.column("label").to_pylist())
 
     # Shuffle and subsample
-    combined = list(zip(texts, text_labels))
-    rng.shuffle(combined)
-    combined = combined[:num_points]
+    selected = rng.permutation(len(texts))[:num_points]
 
-    features = np.zeros((len(combined), seq_length), dtype=np.float32)
-    labels = np.empty(len(combined), dtype=np.int64)
+    features = np.zeros((len(selected), seq_length), dtype=np.float32)
+    labels = np.empty(len(selected), dtype=np.int64)
 
-    for i, (text, label) in enumerate(combined):
+    for i, idx in enumerate(selected):
         # Encode as bytes (UTF-8), truncate/pad to seq_length
-        byte_seq = list(text.encode("utf-8"))[:seq_length]
+        byte_seq = list(texts[idx].encode("utf-8"))[:seq_length]
         features[i, : len(byte_seq)] = byte_seq
-        labels[i] = label
+        labels[i] = text_labels[idx]
 
     return features, labels
 

@@ -5,8 +5,29 @@
   and `data_generators.py` but was previously only available transitively
 - `anywidget` dependency — plotly >=6 moved `go.FigureWidget` behind it, which
   `notebooks/4-rcp-timeseries-datasets.ipynb` requires
+- `pillow` declared as an explicit dependency — now imported directly to decode
+  the PNG-encoded images in HuggingFace parquet files, where previously it was
+  only available transitively via `torchvision`
+- KMNIST restored to the `all=True` dataset sweep, undoing its removal in v0.4.0.
+  It now loads from the pinned HuggingFace mirror rather than
+  `codh.rois.ac.jp`; the mirror was verified byte-identical to the official
+  idx-ubyte files (same 60000 rows in the same order, identical labels), and the
+  resulting tensors are bit-exact against `torchvision.datasets.KMNIST`
+- `generatedata/hf_data.py` — `download_hf_parquet()` for cached, revision-pinned
+  downloads from the HuggingFace Hub, and `HFImageDataset`, a small
+  torchvision-style wrapper over a HuggingFace image/label parquet file
 
 ### Changed
+- CIFAR-10 and IMDB now download from pinned HuggingFace Hub revisions instead of
+  `cs.toronto.edu` and `ai.stanford.edu`.  The CIFAR-10 page had stopped serving
+  data entirely, which hung `generate_all()` (and therefore the whole test suite)
+  indefinitely, since torchvision's downloader sets no socket timeout.  Cold
+  generation of `lra_image` + `lra_text` now takes seconds rather than never
+  completing.  Every dataset source is pinned to a commit hash for reproducibility
+- Dataset downloads are written to a `.partial` file and renamed only on success,
+  so an interrupted download can no longer leave behind a truncated file that
+  later looks complete (the previous failure mode required manually clearing the
+  cache before generation could recover)
 - Loosened all dependency version ranges from tight minor-version pins to
   lower bound + next-major cap (e.g. `torch==2.5.1` → `torch>=2.5,<3`,
   `numpy>=2.1,<2.2` → `numpy>=2.1,<3`), so `generatedata` can be installed

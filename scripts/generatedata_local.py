@@ -11,9 +11,6 @@ def main(all=False):
     data_dir = base_dir / '../data/processed'
     generate_all(data_dir, all=all)
 
-def test_main(all=False):
-    main()
-
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Generate datasets for the generatedata library.")
     parser.add_argument("--all", action="store_true", help="Generate full parameter sweeps.")

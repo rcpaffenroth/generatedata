@@ -13,6 +13,9 @@ dependencies = [
     "mnist1d>=0.0.2",
     "pandas>=2.2,<3",
     "pyarrow>=17",
+    # Used directly to decode the PNG-encoded images in the CIFAR-10 parquet
+    # files; previously only present as a transitive torchvision dependency.
+    "pillow>=10",
     "matplotlib>=3.9,<4",
     "plotly>=5.24,<7",
     # plotly >=6 moved go.FigureWidget behind this optional dependency
@@ -31,19 +34,6 @@ dev = [
     "nbmake>=1.5,<2",
     "jupytext>=1.16,<2",
 ]
-
-# The PyTorch CUDA index is marked "explicit" so it is consulted *only* for the
-# packages routed to it below.  Without this, uv would also pull numpy (and
-# anything else that index happens to mirror) from there, silently capping those
-# versions at whatever PyTorch mirrors.
-[[tool.uv.index]]
-name = "pytorch-cu121"
-url = "https://download.pytorch.org/whl/cu121"
-explicit = true
-
-[tool.uv.sources]
-torch = {index = "pytorch-cu121"}
-torchvision = {index = "pytorch-cu121"}
 
 [tool.pytest.ini_options]
 minversion = "6.0"
