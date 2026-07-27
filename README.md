@@ -35,7 +35,17 @@ This library provides a collection of synthetic datasets that represent start-ta
 - **`LunarLander`**: Lunar Lander game state data (4069 points, 404 features + 4 actions)
 - **`MassSpec`**: Mass spectrometry data (572 points, 921 features + 512 labels)
 
-When the full parameter sweep is enabled (`generate_all(..., all=True)`), the library generates hundreds of MNIST custom and MNIST1D custom variants across grids of transform parameters — including EMNIST and FashionMNIST families.
+### Long Range Arena (LRA) Benchmark Datasets
+
+Native implementations of the [Long Range Arena](https://github.com/google-research/long-range-arena) benchmark tasks for evaluating sequence models on long-context problems. These are part of the core dataset set, so a plain `generate_all(...)` produces them — no extra flag is needed.
+
+- **`lra_listops`**: Hierarchical expression evaluation — nested MIN/MAX/MEDIAN/SUM_MOD operators over single-digit integers (10,000 points, 2048 token sequence + 10 classes)
+- **`lra_text`**: IMDB byte-level sentiment classification — movie reviews encoded as raw byte sequences (10,000 points, 4096 byte sequence + 2 classes)
+- **`lra_image`**: CIFAR-10 sequential classification — grayscale images flattened in raster-scan order (10,000 points, 1024 pixel sequence + 10 classes)
+- **`lra_pathfinder`**: Synthetic visual path connectivity — determine whether two dots in a 32×32 image are connected by a curve (10,000 points, 1024 pixel sequence + 2 classes)
+- **`lra_pathx`**: Extended Pathfinder at 128×128 resolution — same task with much longer sequences (2,000 points, 16384 pixel sequence + 2 classes)
+
+When the full parameter sweep is enabled (`generate_all(..., all=True)`), the library generates hundreds of MNIST custom and MNIST1D custom variants across grids of transform parameters — including EMNIST, KMNIST, and FashionMNIST families.
 
 ## Installation
 
@@ -52,7 +62,7 @@ uv sync
 ```bash
 git clone <repository-url>
 cd generatedata
-uv sync --extra dev
+uv sync --group dev
 ```
 
 ## Usage
@@ -115,6 +125,37 @@ Key points:
 - `label_every_step=True` (default) broadcasts labels to every timestep and concatenates them
 - `label_every_step=False` returns pixels only; labels are returned separately
 
+### Loading LRA Datasets
+
+LRA datasets follow the same API as all other datasets. They are especially well suited for the sequence loading API. Note that they are not yet part of the published remote snapshot, so these examples pass `local=True` (see [Local vs Remote Data](#local-vs-remote-data)):
+
+```python
+from generatedata.load_data import load_data_as_sequence, load_data_as_xy_onehot
+
+# ListOps: one token per timestep
+X_seq, labels = load_data_as_sequence('lra_listops', step_size=1, local=True)
+# X_seq shape: (10000, 2048, 11)  — 1 token + 10 label dims per step
+
+# Tokens only, without the broadcast labels
+X_seq, labels = load_data_as_sequence('lra_listops', step_size=1, local=True,
+                                      label_every_step=False)
+# X_seq shape: (10000, 2048, 1)
+
+# Pathfinder: one row of pixels per timestep
+X_seq, labels = load_data_as_sequence('lra_pathfinder', step_size=32, local=True,
+                                      label_every_step=False)
+# X_seq shape: (10000, 32, 32)
+
+# LRA datasets record a `default_step_size`, so step_size may be omitted
+X_seq, labels = load_data_as_sequence('lra_image', local=True)
+# X_seq shape: (10000, 1024, 11)  — default_step_size=1
+
+# Or load as flat features / one-hot labels.  This emits a UserWarning for
+# sequence datasets, since it returns padded fixed-size rows.
+X, Y = load_data_as_xy_onehot('lra_image', local=True)
+# X shape: (10000, 1024), Y shape: (10000, 10)
+```
+
 ### Using with PyTorch
 
 ```python
@@ -150,6 +191,13 @@ data = load_data.load_data('MNIST', local=True)
 data = load_data.load_data('MNIST', local=False)
 ```
 
+The remote snapshot at `config.DATA_URL` predates the LRA generators and holds
+the full `all=True` sweep (334 datasets: the core sets plus the EMNIST,
+FashionMNIST, MNIST custom, and MNIST1D custom families). It does not yet
+contain the `lra_*` datasets or the KMNIST family, so those must be generated
+locally and loaded with `local=True`. Requesting an unavailable name raises
+`ValueError` listing what is available.
+
 ## Custom Dataset Transforms
 
 The MNIST custom generator supports these torchvision v2 transforms:
@@ -176,6 +224,9 @@ All datasets follow a consistent format:
   - `x_size`: Number of input features
   - `y_size`: Number of output labels
   - `onehot_y`: Whether labels are one-hot encoded
+  - `is_sequence`, `default_step_size`: Present on sequence-native datasets (the
+    LRA family). `default_step_size` lets `load_data_as_sequence` be called
+    without an explicit `step_size`
 
 ## Repository Structure
 
@@ -184,17 +235,20 @@ generatedata/
 ├── generatedata/           # Main library code
 │   ├── load_data.py       # Data loading (flat, X/Y, sequence)
 │   ├── save_data.py       # Data saving utilities
-│   ├── data_generators.py # All dataset generators + transforms
+│   ├── data_generators.py # Core dataset generators + transforms
+│   ├── lra_generators.py  # Long Range Arena (LRA) benchmark generators
+│   ├── hf_data.py         # Pinned HuggingFace Hub downloads + dataset wrapper
 │   ├── StartTargetData.py # PyTorch dataset class
 │   ├── df_to_tensor.py    # DataFrame to tensor conversion
+│   ├── plot_2D_start_end.py # Plotting helper for 2D start/target pairs
 │   └── config.py          # Configuration (data URL, etc.)
 ├── scripts/               # Data generation scripts
 ├── notebooks/             # Example notebooks
 ├── tests/                 # Test suite
 └── data/                  # Generated datasets
     ├── processed/         # Processed parquet files
-    ├── raw/              # Raw data files
-    └── external/         # External datasets (e.g., MNIST)
+    ├── raw/              # Raw data files (EM, LunarLander, MassSpec sources)
+    └── external/         # Cached upstream downloads (MNIST, CIFAR-10, IMDB, KMNIST)
 ```
 
 ## Development
@@ -210,10 +264,30 @@ uv run pytest
 The main entry point for generating all datasets is:
 
 ```bash
+# Generate the core datasets (including the LRA benchmark datasets)
 uv run python scripts/generatedata_local.py
+
+# Also generate the full parameter sweeps (hundreds of custom variants)
+uv run python scripts/generatedata_local.py --all
 ```
 
-This script will generate all supported datasets and place them in the `data/processed/` directory. You can customize which datasets are generated by editing `scripts/generatedata_local.py`.
+This script will generate datasets and place them in the `data/processed/` directory. Datasets whose parquet files already exist are skipped, so re-running it only fills in what is missing.
+
+#### Upstream Data Sources
+
+Datasets that are not synthetic are downloaded and cached under `data/external/`. Several upstream projects publish only from a single academic web server with no CDN, which has proven unreliable, so those are fetched from CDN-backed mirrors instead:
+
+| Dataset | Source |
+| --- | --- |
+| MNIST | `ossci-datasets` S3 mirror (via torchvision) |
+| MNIST1D | GitHub, `greydanus/mnist1d` |
+| CIFAR-10 (for `lra_image`) | HuggingFace `uoft-cs/cifar10`, revision-pinned |
+| IMDB (for `lra_text`) | HuggingFace `stanfordnlp/imdb`, revision-pinned |
+| KMNIST (`all=True` only) | HuggingFace `tanganke/kmnist`, revision-pinned |
+| FashionMNIST (`all=True` only) | Zalando S3 website endpoint (via torchvision) |
+| EMNIST (`all=True` only) | NIST `biometrics.nist.gov` — still a single host with no CDN, and a 536 MB zip |
+
+Each HuggingFace source is pinned to a commit hash in the code, so the downloaded bytes are reproducible. Downloads are cached and written atomically, so an interrupted download does not leave a truncated file behind. The `MNIST1Dcustom_*` variants need no download — they are synthesized locally by the `mnist1d` package.
 
 #### Advanced: Generate Individual Datasets
 
@@ -225,17 +299,18 @@ from pathlib import Path
 generate_circle(Path('data/processed/'), num_points=2000)
 ```
 
-See the source for available generators: `generate_regression_line`, `generate_pca_line`, `generate_circle`, `generate_regression_circle`, `generate_manifold`, `generate_mnist1d`, `generate_mnist1d_custom`, `generate_mnist`, `generate_mnist_custom`, `generate_emlocalization`, `generate_lunarlander`, `generate_massspec`, and `generate_all`.
+See the source for available generators: `generate_regression_line`, `generate_pca_line`, `generate_circle`, `generate_regression_circle`, `generate_manifold`, `generate_mnist1d`, `generate_mnist1d_custom`, `generate_mnist`, `generate_mnist_custom`, `generate_emlocalization`, `generate_lunarlander`, `generate_massspec`, and `generate_all`. LRA generators are in `generatedata/lra_generators.py`: `generate_lra_listops`, `generate_lra_text`, `generate_lra_image`, `generate_lra_pathfinder`, and `generate_lra_pathx`.
 
 #### Copying Data to HTTP-Served Directory
 
 To make generated data available via HTTP (e.g., for remote loading), use:
 
 ```bash
-./scripts/copy_data_to_http.sh /path/to/http/dir
+cd scripts
+./copy_data_to_http.sh
 ```
 
-This will copy all processed data to the specified directory. Ensure you have write permissions and that your web server is configured to serve from this location.
+The script takes no arguments and is specific to the author's WPI hosting setup. It mounts the HTTP directory with `rcp drive mount -d html`, copies everything in `data/processed/` into a new timestamped directory under `~/mnt/html/public_html/data/generatedata/`, and then **rewrites `generatedata/config.py`** so that `DATA_URL` points at the new snapshot. It uses paths relative to `scripts/`, so run it from that directory.
 
 ### Example Notebooks
 

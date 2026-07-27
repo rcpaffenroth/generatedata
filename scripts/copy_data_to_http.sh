@@ -1,7 +1,9 @@
 #! /bin/bash
 
-#  Mount the HTTP server directory
-rcp drive mount -d html
+#  Mount the HTTP server directory if not already mounted
+if [ ! -d "$HOME/mnt/html/public_html" ]; then
+  rcp drive mount -d html
+fi
 
 # Copy the data files to the HTTP server directory
 

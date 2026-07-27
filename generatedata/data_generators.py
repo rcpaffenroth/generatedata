@@ -11,7 +11,15 @@ import pickle
 from pathlib import Path
 from torchvision import datasets
 import torchvision.transforms.v2 as transforms
+from generatedata.hf_data import HFImageDataset, download_hf_parquet
 from generatedata.save_data import save_data
+from generatedata.lra_generators import (
+    generate_lra_listops,
+    generate_lra_image,
+    generate_lra_text,
+    generate_lra_pathfinder,
+    generate_lra_pathx,
+)
 import mnist1d
 
 
@@ -265,6 +273,11 @@ def generate_mnist1d_custom(
     mnist1d_save_data(data_dir, name, num_points, mnist1d_dataset, 
                       additional_info=arg_dict) 
 
+_KMNIST_REPO = "tanganke/kmnist"
+_KMNIST_REVISION = "6b345bef535b98131f1d945d552906452d19b2f9"
+_KMNIST_TRAIN = "kmnist/train-00000-of-00001.parquet"
+
+
 def mnist_save_data(
     data_dir: Path,
     name: str,
@@ -341,7 +354,6 @@ def generate_mnist_custom(
         scale: Scaling range for RandomAffine.
         random_erasing_prob: Probability of applying RandomErasing.
     """
-    dataset_cls = getattr(datasets, dataset_name)
     transform = transforms.Compose([
         transforms.ToTensor(),
         transforms.Resize((50, 50)),
@@ -362,9 +374,20 @@ def generate_mnist_custom(
     datasets.MNIST.mirrors = [
        'https://ossci-datasets.s3.amazonaws.com/mnist/'
     ]
-    if dataset_name == "EMNIST":
+    if dataset_name == "KMNIST":
+        # KMNIST's only official host (codh.rois.ac.jp) is a single academic
+        # server with no CDN, so torchvision's KMNIST loader is unreliable.  The
+        # pinned HuggingFace mirror below is byte-identical to the official
+        # idx-ubyte files: same 60000 rows in the same order, same labels.
+        parquet_path = download_hf_parquet(
+            data_dir.parent.parent / 'data' / 'external' / 'kmnist',
+            _KMNIST_REPO, _KMNIST_REVISION, _KMNIST_TRAIN)
+        mnist_dataset = HFImageDataset(parquet_path, transform=transform)
+    elif dataset_name == "EMNIST":
+        dataset_cls = getattr(datasets, dataset_name)
         mnist_dataset = dataset_cls(root=str(data_dir.parent.parent / 'data' / 'external'), train=True, download=True, transform=transform, split="letters")
     else:
+        dataset_cls = getattr(datasets, dataset_name)
         mnist_dataset = dataset_cls(root=str(data_dir.parent.parent / 'data' / 'external'), train=True, download=True, transform=transform)
     name = f"{dataset_name}_custom_degrees{degrees[0]}_{degrees[1]}_translate{translate[0]}_{translate[1]}_scale{scale[0]}_{scale[1]}_randomerasing_{random_erasing_prob}"
     mnist_save_data(data_dir, name, num_points, mnist_dataset, vector_dim=50*50, additional_info=additional_info)
@@ -449,6 +472,12 @@ def generate_all(data_dir: Path, all: bool) -> None:
         ('EMlocalization',  lambda: generate_emlocalization(data_dir), None),
         ('LunarLander',     lambda: generate_lunarlander(data_dir), None),
         ('MassSpec',        lambda: generate_massspec(data_dir), None),
+        # Long Range Arena (LRA) sequence datasets
+        ('lra_listops',    lambda: generate_lra_listops(data_dir),    {'num_points': 10000}),
+        ('lra_pathfinder', lambda: generate_lra_pathfinder(data_dir), {'num_points': 10000}),
+        ('lra_pathx',      lambda: generate_lra_pathx(data_dir),      {'num_points': 2000}),
+        ('lra_image',      lambda: generate_lra_image(data_dir),      {'num_points': 10000}),
+        ('lra_text',       lambda: generate_lra_text(data_dir),       {'num_points': 10000}),
     ]
 
     for name, generator, expected_params in data_sets:
@@ -499,10 +528,8 @@ def generate_all(data_dir: Path, all: bool) -> None:
         l3_range = [1]
         l4_range = [1.0]
     if all:
-        # FIXME: As of 2/27/2026 KMNIST server seems to be down.  Once the server is back up, we can re-enable the full sweep.
-        # dataset_names = ['MNIST', 'EMNIST', 'KMNIST', 'FashionMNIST']
-        dataset_names = ['MNIST', 'EMNIST', 'FashionMNIST']
-    else:        
+        dataset_names = ['MNIST', 'EMNIST', 'KMNIST', 'FashionMNIST']
+    else:
         dataset_names = ['MNIST']
 
     for dataset_name in dataset_names:

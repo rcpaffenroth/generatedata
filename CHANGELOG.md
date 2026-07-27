@@ -1,3 +1,44 @@
+## [v0.4.1] - 2026-07-25
+
+### Added
+- `requests` declared as an explicit dependency — it is imported by `load_data.py`
+  and `data_generators.py` but was previously only available transitively
+- `anywidget` dependency — plotly >=6 moved `go.FigureWidget` behind it, which
+  `notebooks/4-rcp-timeseries-datasets.ipynb` requires
+- `pillow` declared as an explicit dependency — now imported directly to decode
+  the PNG-encoded images in HuggingFace parquet files, where previously it was
+  only available transitively via `torchvision`
+- KMNIST restored to the `all=True` dataset sweep, undoing its removal in v0.3.2.
+  It now loads from a pinned HuggingFace mirror rather than `codh.rois.ac.jp`;
+  the mirror was verified byte-identical to the official idx-ubyte files (same
+  60000 rows in the same order, identical labels), and the resulting tensors are
+  bit-exact against `torchvision.datasets.KMNIST`
+- `generatedata/hf_data.py` — `download_hf_parquet()` for cached, revision-pinned
+  downloads from the HuggingFace Hub, and `HFImageDataset`, a small
+  torchvision-style wrapper over a HuggingFace image/label parquet file
+
+### Changed
+- CIFAR-10 and IMDB now download from pinned HuggingFace Hub revisions instead of
+  `cs.toronto.edu` and `ai.stanford.edu`.  The CIFAR-10 page had stopped serving
+  data entirely, which hung `generate_all()` (and therefore the whole test suite)
+  indefinitely, since torchvision's downloader sets no socket timeout.  Cold
+  generation of `lra_image` + `lra_text` now takes seconds rather than never
+  completing.  Every dataset source is pinned to a commit hash for reproducibility
+- Dataset downloads are written to a `.partial` file and renamed only on success,
+  so an interrupted download can no longer leave behind a truncated file that
+  later looks complete (the previous failure mode required manually clearing the
+  cache before generation could recover)
+- Loosened all dependency version ranges from tight minor-version pins to
+  lower bound + next-major cap (e.g. `torch==2.5.1` → `torch>=2.5,<3`,
+  `numpy>=2.1,<2.2` → `numpy>=2.1,<3`), so `generatedata` can be installed
+  alongside other projects without version conflicts.  The test suite was
+  verified at both the floor (`--resolution lowest-direct`) and the ceiling
+  (torch 2.13, numpy 2.2, pandas 2.3, plotly 6.9, scikit-learn 1.7)
+- The PyTorch CUDA index is now declared with `explicit = true` and routed only
+  to `torch`/`torchvision` via `[tool.uv.sources]`.  Previously it was the
+  default index for *every* package, which silently capped versions of anything
+  that index happens to mirror (notably `numpy`)
+
 ## [v0.4.0] - 2026-03-16
 
 ### Added
@@ -6,7 +47,8 @@
   at load time, with configurable `step_size` and `label_every_step` options
 - Random erasing transform (`random_erasing_prob`) for MNIST custom dataset generation,
   enabling new augmented MNIST variants
-- S3 mirror fallback for MNIST downloads to handle unreliable upstream server
+- MNIST downloads pinned to the `ossci-datasets` S3 mirror, replacing torchvision's
+  default mirror list so the often-unavailable `yann.lecun.com` is never tried
 - New notebook `notebooks/4-rcp-timeseries-datasets.ipynb` — interactive sequence
   builder with step-by-step pixel reveal, heatmap visualisation, and a complete
   LSTM classifier training example
