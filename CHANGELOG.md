@@ -33,6 +33,28 @@
   `is_sequence`, since their rows are not padded and the flat X/Y view is
   legitimate
 
+## [v0.4.3] - 2026-07-27
+
+### Fixed
+- CI dependency install in `.github/workflows/python-tests.yml`: the step still ran
+  `uv sync --extra dev`, but the dev dependencies had moved from
+  `[project.optional-dependencies]` to `[dependency-groups]`, so no such extra
+  existed and the install failed.  Now `uv sync --group dev`
+
+### Changed
+- Version bump to 0.4.3.  This is the first tag on `main` that actually contains
+  the v0.4.1 changes below: they were developed on `release/v0.4.1` and only merged
+  to `main` here, so despite the version ordering, v0.4.2 does not include them
+- `.github/copilot-instructions.md` removed in favour of the global instructions
+  file
+
+## [v0.4.2] - 2026-07-26
+
+### Changed
+- Version bump only, `0.4.0` → `0.4.2` in `pyproject.toml`.  No functional change:
+  the tag was cut from the `develop` line before the v0.4.1 work was merged, so its
+  tree predates everything in the v0.4.1 entry below
+
 ## [v0.4.1] - 2026-07-25
 
 ### Added
