@@ -20,6 +20,7 @@ from generatedata.lra_generators import (
     generate_lra_pathfinder,
     generate_lra_pathx,
 )
+from generatedata.whest_generators import WHEST_MC_SAMPLES, generate_whest
 import mnist1d
 
 
@@ -478,6 +479,11 @@ def generate_all(data_dir: Path, all: bool) -> None:
         ('lra_pathx',      lambda: generate_lra_pathx(data_dir),      {'num_points': 2000}),
         ('lra_image',      lambda: generate_lra_image(data_dir),      {'num_points': 10000}),
         ('lra_text',       lambda: generate_lra_text(data_dir),       {'num_points': 10000}),
+        # ARC White-Box Estimation Challenge: predict a ReLU MLP's final-layer
+        # mean activation from its weights.  Wider/deeper geometries are in the
+        # all=True sweep below, since flatten(W) grows as depth*width^2.
+        ('whest_w8_d8',    lambda: generate_whest(data_dir, width=8, depth=8),
+         {'num_points': 10000, 'width': 8, 'depth': 8, 'mc_samples': WHEST_MC_SAMPLES}),
     ]
 
     for name, generator, expected_params in data_sets:
@@ -485,6 +491,23 @@ def generate_all(data_dir: Path, all: bool) -> None:
             print(f'Skipping {name} (already exists)')
         else:
             generator()
+
+    # Wider / deeper whest geometries, for width- and depth-scaling studies.  Only
+    # in the full sweep: flatten(W) has depth*width^2 columns, so these rows are
+    # 8-16x larger than the core whest_w8_d8.
+    if all:
+        whest_geometries = [(16, 16, 2000), (32, 8, 2000)]
+    else:
+        whest_geometries = []
+    for width, depth, num_points in whest_geometries:
+        name = f'whest_w{width}_d{depth}'
+        expected_params = {'num_points': num_points, 'width': width, 'depth': depth,
+                           'mc_samples': WHEST_MC_SAMPLES}
+        if dataset_exists(data_dir, name, expected_params):
+            print(f'Skipping {name} (already exists)')
+        else:
+            print(f'whest width={width} depth={depth}')
+            generate_whest(data_dir, width=width, depth=depth, num_points=num_points)
 
     if all:
         l1_range = np.arange(0.5, 1.51, 0.5)

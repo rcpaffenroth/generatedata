@@ -45,6 +45,31 @@ Native implementations of the [Long Range Arena](https://github.com/google-resea
 - **`lra_pathfinder`**: Synthetic visual path connectivity — determine whether two dots in a 32×32 image are connected by a curve (10,000 points, 1024 pixel sequence + 2 classes)
 - **`lra_pathx`**: Extended Pathfinder at 128×128 resolution — same task with much longer sequences (2,000 points, 16384 pixel sequence + 2 classes)
 
+### Weight-Space Estimation (whest) Datasets
+
+Datasets for the ARC White-Box Estimation Challenge 2026: given **only the weights** of a deep ReLU MLP, predict its final layer's mean activation under a standard normal input. Writing one network's forward map as `z_l = relu(z_{l-1} W_l)`, the target is
+
+    F(W) = E_{x ~ N(0, I)} [ z_depth ]   in R^width
+
+which is a *deterministic* function of `W` alone — the input distribution is integrated out. Each row is one random network: the features are `flatten(W)` in layer-major order, and the labels are the `width` final-layer means.
+
+- **`whest_w8_d8`**: width 8, depth 8 (10,000 points, 512 weight features + 8 labels)
+
+The `all=True` sweep adds **`whest_w16_d16`** (4096 features) and **`whest_w32_d8`** (8192 features), 2,000 points each, for width- and depth-scaling studies. They are gated because `flatten(W)` has `depth × width²` columns, so rows grow quickly; the competition's own geometry (width 256, depth 32) is 2,097,152 columns per row and is deliberately out of scope for this flat format.
+
+Weights follow the competition conventions exactly: entries iid `N(0, 2/width)` (He initialisation at fan-in `width`), **no biases**, and the forward map is `z ← relu(z @ W)` — note `@W`, *not* `@W.T`. `relu` is applied at every layer, including the last.
+
+Unlike every other dataset here, the start/target split carries a *baseline*, not noise:
+
+- **target** labels are the Monte-Carlo ground truth `F(W)`
+- **start** labels are `UT_fixed(W)`, a cheap deterministic estimate from the `2·width` unscented-transform sigma points `±r·e_i` at the shell radius `r = E‖x‖ = √2·Γ((width+1)/2)/Γ(width/2)` (the first radial moment, which is the right one because `relu` chains are positively homogeneous of degree one)
+
+so `target − start` is the estimator's residual `R(W) = F(W) − UT_fixed(W)`. Since no random rotations are used, `UT_fixed` — and hence `R` — is itself a deterministic function of `W`, making correction a well-posed regression problem.
+
+Metadata records what the labels can support: `mc_samples`, the measured label noise `label_mc_se2` (the Monte-Carlo variance floor), `ut_final_layer_mse` (the raw MSE of the cheap estimator encoded in the start data — the number a learned model has to beat), and `dead_fraction` (the share of networks with `F ≡ 0`; narrow deep ReLU nets die, and because `relu` is positively homogeneous no rescaling of `W` revives them — at width 2 and depth 32 *every* network is dead).
+
+Generation is Monte-Carlo over `mc_samples` inputs per network, accumulated in float64 with TF32 disabled. The default `whest_w8_d8` takes ~10 s on a GPU but ~8 minutes CPU-only; it is written once and skipped thereafter.
+
 When the full parameter sweep is enabled (`generate_all(..., all=True)`), the library generates hundreds of MNIST custom and MNIST1D custom variants across grids of transform parameters — including EMNIST, KMNIST, and FashionMNIST families.
 
 ## Installation
@@ -156,6 +181,35 @@ X, Y = load_data_as_xy_onehot('lra_image', local=True)
 # X shape: (10000, 1024), Y shape: (10000, 10)
 ```
 
+### Loading whest Datasets
+
+The whest datasets are regression datasets (continuous labels), so they load with
+`load_data_as_xy`. They are not part of the published remote snapshot yet, so these
+examples pass `local=True`:
+
+```python
+from generatedata.load_data import load_data, load_data_as_xy, load_data_as_sequence
+
+# Flat view: X = flatten(W), Y = the final-layer means F(W)
+X, Y = load_data_as_xy('whest_w8_d8', local=True)
+# X shape: (10000, 512)  — 8 layers x 8 x 8 weights,  Y shape: (10000, 8)
+
+# Sequence view: one weight matrix per timestep, in layer order.  The recorded
+# default_step_size is width**2, so step_size may be omitted.
+W_seq, F = load_data_as_sequence('whest_w8_d8', local=True, label_every_step=False)
+# W_seq shape: (10000, 8, 64)  — reshape the last axis to (8, 8) for layer l's matrix
+W_seq = W_seq.reshape(-1, 8, 8, 8)   # (nets, depth, width, width)
+
+# The cheap-estimator baseline: start labels are UT_fixed(W), target labels are F(W)
+data = load_data('whest_w8_d8', local=True)
+residual = (data['target'].iloc[:, 512:].to_numpy()
+            - data['start'].iloc[:, 512:].to_numpy())   # R(W) = F - UT_fixed
+```
+
+The layer-ordered sequence view is the natural input for a recurrent model of the
+layer dynamics: the forward pass is a product of random matrices acting on a
+distribution, and `F` is a functional of its terminal distribution.
+
 ### Using with PyTorch
 
 ```python
@@ -194,9 +248,9 @@ data = load_data.load_data('MNIST', local=False)
 The remote snapshot at `config.DATA_URL` predates the LRA generators and holds
 the full `all=True` sweep (334 datasets: the core sets plus the EMNIST,
 FashionMNIST, MNIST custom, and MNIST1D custom families). It does not yet
-contain the `lra_*` datasets or the KMNIST family, so those must be generated
-locally and loaded with `local=True`. Requesting an unavailable name raises
-`ValueError` listing what is available.
+contain the `lra_*` datasets, the `whest_*` datasets, or the KMNIST family, so
+those must be generated locally and loaded with `local=True`. Requesting an
+unavailable name raises `ValueError` listing what is available.
 
 ## Custom Dataset Transforms
 
@@ -224,9 +278,10 @@ All datasets follow a consistent format:
   - `x_size`: Number of input features
   - `y_size`: Number of output labels
   - `onehot_y`: Whether labels are one-hot encoded
-  - `is_sequence`, `default_step_size`: Present on sequence-native datasets (the
-    LRA family). `default_step_size` lets `load_data_as_sequence` be called
-    without an explicit `step_size`
+  - `is_sequence`: Present on sequence-native datasets whose flat rows are padded
+    (the LRA family), so that loading them as flat X/Y warns
+  - `default_step_size`: Lets `load_data_as_sequence` be called without an
+    explicit `step_size` (1 for the LRA family, `width**2` for the whest family)
 
 ## Repository Structure
 
@@ -237,6 +292,7 @@ generatedata/
 │   ├── save_data.py       # Data saving utilities
 │   ├── data_generators.py # Core dataset generators + transforms
 │   ├── lra_generators.py  # Long Range Arena (LRA) benchmark generators
+│   ├── whest_generators.py # Weight-space estimation (whest) generators
 │   ├── hf_data.py         # Pinned HuggingFace Hub downloads + dataset wrapper
 │   ├── StartTargetData.py # PyTorch dataset class
 │   ├── df_to_tensor.py    # DataFrame to tensor conversion
@@ -299,7 +355,15 @@ from pathlib import Path
 generate_circle(Path('data/processed/'), num_points=2000)
 ```
 
-See the source for available generators: `generate_regression_line`, `generate_pca_line`, `generate_circle`, `generate_regression_circle`, `generate_manifold`, `generate_mnist1d`, `generate_mnist1d_custom`, `generate_mnist`, `generate_mnist_custom`, `generate_emlocalization`, `generate_lunarlander`, `generate_massspec`, and `generate_all`. LRA generators are in `generatedata/lra_generators.py`: `generate_lra_listops`, `generate_lra_text`, `generate_lra_image`, `generate_lra_pathfinder`, and `generate_lra_pathx`.
+See the source for available generators: `generate_regression_line`, `generate_pca_line`, `generate_circle`, `generate_regression_circle`, `generate_manifold`, `generate_mnist1d`, `generate_mnist1d_custom`, `generate_mnist`, `generate_mnist_custom`, `generate_emlocalization`, `generate_lunarlander`, `generate_massspec`, and `generate_all`. LRA generators are in `generatedata/lra_generators.py`: `generate_lra_listops`, `generate_lra_text`, `generate_lra_image`, `generate_lra_pathfinder`, and `generate_lra_pathx`. The whest generator is `generate_whest` in `generatedata/whest_generators.py`, parameterised by `width`, `depth`, `num_points`, and `mc_samples`:
+
+```python
+from generatedata.whest_generators import generate_whest
+from pathlib import Path
+generate_whest(Path('data/processed/'), width=16, depth=16, num_points=2000)
+```
+
+That module also exposes the pieces on their own — `he_weights` (draw competition-faithful networks), `mc_final_mean` (the Monte-Carlo ground truth, returning the mean and its second moment so the label's own standard error is available), and `ut_fixed_final_mean` (the cheap deterministic estimate).
 
 #### Copying Data to HTTP-Served Directory
 

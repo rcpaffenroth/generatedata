@@ -1,3 +1,38 @@
+## [v0.4.4] - 2026-07-28
+
+### Added
+- `generatedata/whest_generators.py` — datasets for the ARC White-Box Estimation
+  Challenge 2026: predict a deep ReLU MLP's final-layer mean activation
+  `F(W) = E_{x~N(0,I)}[relu-chain(x)]` from its weights alone.  One row per random
+  network: features are `flatten(W)` in layer-major order, labels are the `width`
+  final-layer means.  `generate_whest(data_dir, width, depth, num_points,
+  mc_samples, seed)` is the entry point; `he_weights`, `mc_final_mean`, and
+  `ut_fixed_final_mean` are usable independently
+- `whest_w8_d8` added to the core dataset set (10,000 networks, 512 features + 8
+  labels, ~60 MB).  `all=True` additionally generates `whest_w16_d16` and
+  `whest_w32_d8` (2,000 networks each); those are gated because `flatten(W)` has
+  `depth × width²` columns.  The competition's own geometry (width 256, depth 32)
+  would need 2,097,152 columns per row and is out of scope for the flat format
+- Competition conventions are reproduced exactly: weights iid `N(0, 2/width)`
+  (He init at fan-in `width`) with no biases, and the forward map `z ← relu(z @ W)`
+  — `@W`, not `@W.T`.  Ground-truth sums are accumulated in float64 with TF32
+  disabled (TF32's ~1e-3 relative error per layer would exceed the Monte-Carlo
+  noise being paid for); the TF32 flag is restored afterwards rather than set
+  globally at import
+- The whest start/target split carries a baseline rather than noise: target labels
+  are the Monte-Carlo ground truth `F(W)`, start labels are `UT_fixed(W)` — the
+  `2·width` unscented-transform sigma points `±r·e_i` at radius `r = E‖x‖`, with no
+  random rotations — so `target − start` is the deterministic residual
+  `R(W) = F(W) − UT_fixed(W)`
+- whest metadata records `mc_samples`, the measured label noise `label_mc_se2`, the
+  cheap estimator's error `ut_final_layer_mse`, `dead_fraction` (networks with
+  `F ≡ 0`), `weight_std`, `forward_convention`, and `flatten_order`
+- whest datasets record `default_step_size = width**2`, so `load_data_as_sequence`
+  returns `(num_points, depth, width**2)` — one weight matrix per timestep in layer
+  order — with no change to `load_data.py`.  They deliberately do *not* set
+  `is_sequence`, since their rows are not padded and the flat X/Y view is
+  legitimate
+
 ## [v0.4.1] - 2026-07-25
 
 ### Added
