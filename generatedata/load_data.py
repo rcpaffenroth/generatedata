@@ -59,18 +59,19 @@ def _load_npy_array(
     return np.load(io.BytesIO(response.content))
 
 
-def data_names(local: bool = False) -> list[str]:
+def data_names(local: bool = False, data_dir: Path | str | None = None) -> list[str]:
     """List the names of the datasets that are available to load.
+
+    Args:
+        local: If True, list datasets from a local processed data directory.
+        data_dir: Override the default data directory.  Only meaningful with
+            ``local``; the remote listing has one location.
 
     Returns:
         list: the names of the datasets
     """
     if local:
-        # The directory in which the notebook is located.
-        base_dir = pathlib.Path(generatedata.__path__[0])
-        # The directory where the data is stored.
-        data_dir = base_dir / "../data/processed"
-        with open(data_dir / "info.json", "r") as f:
+        with open(_resolve_data_dir(data_dir) / "info.json", "r") as f:
             data_info = json.load(f)
     else:
         # Read the info json file from the URL DATA_URL+'/info.json'
@@ -119,14 +120,19 @@ def load_data(name: str, local: bool = False, data_dir: Path | str | None = None
 
     Args:
         name (str): the name of the dataset
+        local (bool): If True, read from a local processed data directory.
+        data_dir: Override the default data directory.
 
     Returns:
         dict: the start and target points of the dataset
     """
-    valid_names = data_names(local=local)
-    if name not in valid_names:
-        raise ValueError(f"Unknown dataset '{name}'. Available datasets: {valid_names}")
-
+    # No separate name check here.  There used to be a `data_names(local=local)`
+    # membership test, which ignored `data_dir` and so read the *package-relative*
+    # directory: with `data_dir` pointing anywhere else it raised FileNotFoundError
+    # (or "Unknown dataset") before `data_dir` was ever consulted.  `_dataset_info`
+    # below does honour `data_dir` and raises the identical ValueError for a name
+    # that is not there, so the check was redundant as well as wrong -- and in the
+    # remote case it cost a second fetch of info.json on every load.
     data_info = _dataset_info(name, local=local, data_dir=data_dir)
 
     # A few datasets are not a flat start/target parquet pair and so have no

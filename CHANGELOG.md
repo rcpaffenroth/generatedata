@@ -1,5 +1,22 @@
 ## [v0.4.4] - 2026-07-28
 
+### Fixed
+- `load_data(name, local=True, data_dir=...)` now reads the directory it is given.  It
+  checked the name against `data_names(local=local)` first, which ignores `data_dir` and
+  reads the package-relative `data/processed`, so any other directory raised
+  `FileNotFoundError` — or `Unknown dataset` — before `data_dir` was consulted at all.
+  Everything downstream of it (`load_data_as_xy`, `load_data_as_xy_onehot`,
+  `load_data_as_sequence` on parquet datasets) was unreachable outside the package
+  directory for the same reason.  The check is gone rather than repaired:
+  `_dataset_info` already validates the name, already honours `data_dir`, and raises the
+  same `ValueError` — so the check was redundant as well as wrong, and in the remote
+  case it fetched `info.json` a second time on every load.  Three tests in
+  `test_load_data.py` cover it, including that the package directory is *not* consulted
+  as a fallback.  Note that `tests/test_timeseries.py` and `tests/test_lra_generators.py`
+  patch `data_names` in order to get past this check; those patches are now dead
+- `data_names(local=True, data_dir=...)` takes a `data_dir` argument, which is what
+  makes the above testable, and no longer re-implements `_resolve_data_dir` inline
+
 ### Added
 - `lra_image_mnist` — MNIST in the same start/target sequence format as `lra_image`,
   giving an easy/hard pair of real image tasks that share a loader and a model config.
