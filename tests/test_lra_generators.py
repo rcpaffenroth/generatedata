@@ -14,7 +14,9 @@ from generatedata.lra_generators import (
     generate_lra_pathfinder,
     generate_lra_pathx,
     generate_lra_image,
+    generate_lra_image_mnist,
     generate_lra_text,
+    generate_lra_toy_bw,
 )
 from generatedata.data_generators import compile_info_json
 from generatedata.load_data import (
@@ -177,6 +179,63 @@ class TestImage:
         assert all(0 <= l < 10 for l in labels)
 
 
+class TestImageMNIST:
+    def test_generate(self, tmp_path):
+        generate_lra_image_mnist(tmp_path, num_points=NUM_POINTS)
+        start_df, target_df, info = _check_dataset_files(
+            tmp_path, "lra_image_mnist", 784, 10, NUM_POINTS
+        )
+        # Digits are kept at native 28x28, not resized to CIFAR's 32x32
+        assert info["image_size"] == 28
+        assert info["source"] == "MNIST"
+
+        # ToTensor pixel values should be in [0, 1]
+        features = target_df.iloc[:, :784].to_numpy()
+        assert features.min() >= 0.0
+        assert features.max() <= 1.0
+
+        labels = target_df.iloc[:, 784:].to_numpy().argmax(axis=1)
+        assert all(0 <= l < 10 for l in labels)
+
+
+class TestToyBW:
+    def test_generate(self, tmp_path):
+        noise_scale = 0.05
+        generate_lra_toy_bw(tmp_path, num_points=NUM_POINTS, noise_scale=noise_scale)
+        start_df, target_df, info = _check_dataset_files(
+            tmp_path, "lra_toy_bw", 64, 2, NUM_POINTS
+        )
+        features = target_df.iloc[:, :64].to_numpy()
+        labels = target_df.iloc[:, 64:].to_numpy().argmax(axis=1)
+
+        # Clipped to [0, 1]
+        assert features.min() >= 0.0
+        assert features.max() <= 1.0
+
+        # Labels alternate, so the classes are exactly balanced
+        assert labels.sum() == NUM_POINTS // 2
+
+        # Trivially separable: the two class levels are 0.1 and 0.9, and averaging
+        # 64 pixels shrinks the noise by a further factor of 8
+        row_means = features.mean(axis=1)
+        assert row_means[labels == 0].max() < 0.5
+        assert row_means[labels == 1].min() > 0.5
+
+        # Nonzero noise means every row is distinct, so per-pixel variance is
+        # never exactly zero
+        assert np.unique(features, axis=0).shape[0] == NUM_POINTS
+
+    def test_zero_noise_gives_constant_images(self, tmp_path):
+        """noise_scale=0 collapses the dataset to exactly two distinct rows."""
+        generate_lra_toy_bw(tmp_path, num_points=NUM_POINTS, noise_scale=0.0)
+        start_df, target_df, info = _check_dataset_files(
+            tmp_path, "lra_toy_bw", 64, 2, NUM_POINTS
+        )
+        features = target_df.iloc[:, :64].to_numpy()
+        assert np.unique(features, axis=0).shape[0] == 2
+        assert np.allclose(np.unique(features), [0.1, 0.9])
+
+
 class TestText:
     def test_generate(self, tmp_path):
         generate_lra_text(tmp_path, num_points=NUM_POINTS, seq_length=256)
@@ -253,6 +312,22 @@ class TestDefaultStepSize:
         # default_step_size=1, so each timestep has 1 feature
         assert X_seq.shape == (20, seq_len, 1)
         assert labels.shape == (20, 10)
+
+    def test_toy_bw_default_step_size(self, tmp_path):
+        """The toy set is the cheapest end-to-end check of the sequence loader."""
+        generate_lra_toy_bw(tmp_path, num_points=20)
+        compile_info_json(tmp_path)
+        with patch("generatedata.load_data.data_names", return_value=["lra_toy_bw"]):
+            X_seq, labels = load_data_as_sequence(
+                "lra_toy_bw", local=True, data_dir=tmp_path, label_every_step=False,
+            )
+        assert X_seq.shape == (20, 64, 1)
+        assert labels.shape == (20, 2)
+        # Still separable after the reshape into (num_points, seq_len, 1)
+        row_means = np.asarray(X_seq).mean(axis=(1, 2))
+        classes = np.asarray(labels).argmax(axis=1)
+        assert row_means[classes == 0].max() < 0.5
+        assert row_means[classes == 1].min() > 0.5
 
     def test_missing_step_size_and_no_default_raises(self, tmp_path):
         """Dataset without default_step_size must raise ValueError when step_size omitted."""

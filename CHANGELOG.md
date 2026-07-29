@@ -1,6 +1,25 @@
 ## [v0.4.4] - 2026-07-28
 
 ### Added
+- `lra_image_mnist` — MNIST in the same start/target sequence format as `lra_image`,
+  giving an easy/hard pair of real image tasks that share a loader and a model config.
+  Digits stay at their native 28×28 (sequence length 784) rather than being resized to
+  CIFAR's 32×32: resampling would buy shape-compatibility with `lra_image` at the cost
+  of no longer being MNIST's pixels.  Normalized to `[0, 1]` like the other LRA image
+  tasks, not to the `[-1, 1]` that the older `MNIST` dataset uses.  Fetched through the
+  same `ossci-datasets` S3 mirror and `data/external` cache as `generate_mnist`, so it
+  costs no additional download
+- `lra_toy_bw` — 8×8 images that are uniformly dark or uniformly bright, plus iid pixel
+  noise; sequence length 64, two classes, exactly balanced.  Not a benchmark task: it
+  exists because every real LRA task is either slow or hard, which makes them poor
+  choices for checking that a model, a training loop, or the `load_data_as_sequence`
+  path works at all.  Class levels 0.1 and 0.9 against the default noise scale 0.05 are
+  16 standard deviations apart per pixel, so it is trivially separable — but the noise
+  is deliberately nonzero so that every row is distinct and per-pixel variance is never
+  exactly zero.  `noise_scale=0` recovers the fully degenerate two-distinct-rows version
+- Both are in `generate_all` at 1,000 points each, matching the existing `MNIST` and
+  `MNIST1D` entries.  They are not in the remote snapshot at `config.DATA_URL`, so like
+  the rest of the `lra_*` family they need `local=True`
 - `notebooks/5-rcp-whest-visualization.ipynb` (with a `tests/` copy, so nbmake runs it)
   — loads everything with `local=True`, since these datasets are not in the remote
   snapshot, and adapts to whichever of them are present rather than assuming the full

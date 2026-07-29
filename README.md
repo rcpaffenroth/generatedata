@@ -45,6 +45,13 @@ Native implementations of the [Long Range Arena](https://github.com/google-resea
 - **`lra_pathfinder`**: Synthetic visual path connectivity — determine whether two dots in a 32×32 image are connected by a curve (10,000 points, 1024 pixel sequence + 2 classes)
 - **`lra_pathx`**: Extended Pathfinder at 128×128 resolution — same task with much longer sequences (2,000 points, 16384 pixel sequence + 2 classes)
 
+Two more datasets share this format but are **not** part of the benchmark. They exist
+because every task above is either hard, slow, or both, which makes them poor choices
+for checking that a model or training loop works at all:
+
+- **`lra_image_mnist`**: MNIST sequential classification — the easy counterpart of `lra_image`, digits kept at their native 28×28 rather than resized, so sequences are shorter (1,000 points, 784 pixel sequence + 10 classes)
+- **`lra_toy_bw`**: 8×8 images that are uniformly dark or uniformly bright, plus small iid pixel noise. The two class levels are 0.1 and 0.9 against a noise scale of 0.05, i.e. 16 standard deviations apart per pixel, so the task is trivially separable — this is a smoke test, not a benchmark (1,000 points, 64 pixel sequence + 2 classes)
+
 ### Weight-Space Estimation (whest) Datasets
 
 Datasets for the ARC White-Box Estimation Challenge 2026: given **only the weights** of a deep ReLU MLP, predict its mean layer activations under a standard normal input. Writing one network's forward map as `z_l = relu(z_{l-1} W_l)`, the target is
@@ -371,7 +378,7 @@ Datasets that are not synthetic are downloaded and cached under `data/external/`
 
 | Dataset | Source |
 | --- | --- |
-| MNIST | `ossci-datasets` S3 mirror (via torchvision) |
+| MNIST (also for `lra_image_mnist`) | `ossci-datasets` S3 mirror (via torchvision) |
 | MNIST1D | GitHub, `greydanus/mnist1d` |
 | CIFAR-10 (for `lra_image`) | HuggingFace `uoft-cs/cifar10`, revision-pinned |
 | IMDB (for `lra_text`) | HuggingFace `stanfordnlp/imdb`, revision-pinned |
@@ -392,7 +399,7 @@ from pathlib import Path
 generate_circle(Path('data/processed/'), num_points=2000)
 ```
 
-See the source for available generators: `generate_regression_line`, `generate_pca_line`, `generate_circle`, `generate_regression_circle`, `generate_manifold`, `generate_mnist1d`, `generate_mnist1d_custom`, `generate_mnist`, `generate_mnist_custom`, `generate_emlocalization`, `generate_lunarlander`, `generate_massspec`, and `generate_all`. LRA generators are in `generatedata/lra_generators.py`: `generate_lra_listops`, `generate_lra_text`, `generate_lra_image`, `generate_lra_pathfinder`, and `generate_lra_pathx`. The whest generators are in `generatedata/whest_generators.py` — `generate_whest` for a bake of your own and `generate_whest_official` to carve rows out of the published competition data:
+See the source for available generators: `generate_regression_line`, `generate_pca_line`, `generate_circle`, `generate_regression_circle`, `generate_manifold`, `generate_mnist1d`, `generate_mnist1d_custom`, `generate_mnist`, `generate_mnist_custom`, `generate_emlocalization`, `generate_lunarlander`, `generate_massspec`, and `generate_all`. LRA generators are in `generatedata/lra_generators.py`: `generate_lra_listops`, `generate_lra_text`, `generate_lra_image`, `generate_lra_image_mnist`, `generate_lra_pathfinder`, `generate_lra_pathx`, and `generate_lra_toy_bw`. The whest generators are in `generatedata/whest_generators.py` — `generate_whest` for a bake of your own and `generate_whest_official` to carve rows out of the published competition data:
 
 ```python
 from generatedata.whest_generators import generate_whest, generate_whest_official

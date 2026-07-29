@@ -16,9 +16,11 @@ from generatedata.save_data import save_data
 from generatedata.lra_generators import (
     generate_lra_listops,
     generate_lra_image,
+    generate_lra_image_mnist,
     generate_lra_text,
     generate_lra_pathfinder,
     generate_lra_pathx,
+    generate_lra_toy_bw,
 )
 from generatedata.whest_generators import (
     WHEST_ARRAYS,
@@ -506,6 +508,10 @@ def generate_all(data_dir: Path, all: bool) -> None:
         ('lra_pathx',      lambda: generate_lra_pathx(data_dir),      {'num_points': 2000}),
         ('lra_image',      lambda: generate_lra_image(data_dir),      {'num_points': 10000}),
         ('lra_text',       lambda: generate_lra_text(data_dir),       {'num_points': 10000}),
+        # Same format as the LRA tasks above, but not part of the benchmark:
+        # MNIST as the easy counterpart of lra_image, and an 8x8 smoke test.
+        ('lra_image_mnist', lambda: generate_lra_image_mnist(data_dir), {'num_points': 1000}),
+        ('lra_toy_bw',      lambda: generate_lra_toy_bw(data_dir),      {'num_points': 1000}),
         # ARC White-Box Estimation Challenge: predict a ReLU MLP's layer mean
         # activations from its weights.  Only the cheapest rung is built here.  The
         # rest of the ladder -- wider and deeper geometries, and the officially

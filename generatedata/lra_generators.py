@@ -10,6 +10,11 @@ Native Python/PyTorch implementations of the LRA benchmark tasks:
 
 Reference: Tay et al., "Long Range Arena: A Benchmark for Efficient Transformers", 2020.
 https://github.com/google-research/long-range-arena
+
+Two extras that are not part of the benchmark but share its data format, so the
+same loader and model code runs on them:
+- Image (MNIST): the easy counterpart of the CIFAR image task (seq_len=784, 10 classes)
+- Toy black/white: a trivially separable smoke test (seq_len=64, 2 classes)
 """
 
 import io
@@ -21,6 +26,7 @@ import numpy as np
 import pyarrow.parquet as pq
 import torch
 from PIL import Image
+from torchvision import datasets, transforms
 
 from generatedata.hf_data import download_hf_parquet
 from generatedata.save_data import save_data
@@ -562,6 +568,76 @@ def generate_lra_image(
 
 
 # =============================================================================
+# Image (MNIST)
+# =============================================================================
+
+def generate_lra_image_mnist(
+    data_dir: Path,
+    num_points: int = 1000,
+    seed: int = 42,
+) -> None:
+    """Generate the easy counterpart of the LRA Image task, from MNIST.
+
+    Same start/target format as ``generate_lra_image``, but the digits are kept at
+    their native 28x28 resolution, so sequences are 784 long rather than 1024.  The
+    point of this dataset is to have a real image classification task in the LRA
+    format that a model can actually solve, for debugging and for sanity checks
+    before spending time on CIFAR.
+
+    Args:
+        data_dir: Output directory.
+        num_points: Number of samples, drawn with replacement from the 60000
+            training images.
+        seed: Random seed.
+    """
+    rng = np.random.default_rng(seed)
+
+    # The original MNIST server is frequently down; the S3 mirror is byte-identical.
+    # Same override as ``generate_mnist`` in data_generators.py.
+    datasets.MNIST.mirrors = [
+        'https://ossci-datasets.s3.amazonaws.com/mnist/'
+    ]
+    # ToTensor alone gives float pixels in [0, 1], which is the normalization every
+    # other LRA image task uses.  Deliberately no Normalize((0.5,), (0.5,)) here --
+    # that would give [-1, 1] and break the family convention.
+    mnist_dataset = datasets.MNIST(
+        root=str(Path(data_dir).parent.parent / "data" / "external"),
+        train=True,
+        download=True,
+        transform=transforms.ToTensor(),
+    )
+
+    seq_length = 28 * 28
+    features = np.empty((num_points, seq_length), dtype=np.float32)
+    labels = np.empty(num_points, dtype=np.int64)
+
+    indices = rng.integers(0, len(mnist_dataset), size=num_points)
+    for i, idx in enumerate(indices):
+        img, label = mnist_dataset[int(idx)]   # img is a tensor of shape (1, 28, 28)
+        features[i] = img.numpy().ravel()      # raster-scan flatten -> (784,)
+        labels[i] = label
+
+    _lra_save_classification_data(
+        data_dir,
+        "lra_image_mnist",
+        features,
+        labels,
+        num_classes=10,
+        additional_info={
+            "data_family": "LRA",
+            "lra_task": "image_mnist",
+            "is_sequence": True,
+            "default_step_size": 1,
+            "sequence_length": seq_length,
+            "image_size": 28,
+            "num_classes": 10,
+            "source": "MNIST",
+            "seed": seed,
+        },
+    )
+
+
+# =============================================================================
 # Text (IMDB)
 # =============================================================================
 
@@ -651,6 +727,65 @@ def generate_lra_text(
             "num_classes": 2,
             "source": "IMDB",
             "encoding": "byte",
+            "seed": seed,
+        },
+    )
+
+
+# =============================================================================
+# Toy black/white smoke test
+# =============================================================================
+#
+# Not an LRA benchmark task.  This is the smallest thing that still has the shape
+# of one, so it can be used to check that a model, a training loop, or the
+# load_data_as_sequence path works at all before paying for a real task.
+
+def generate_lra_toy_bw(
+    data_dir: Path,
+    num_points: int = 1000,
+    image_size: int = 8,
+    noise_scale: float = 0.05,
+    seed: int = 42,
+) -> None:
+    """Generate 8x8 images that are uniformly dark or uniformly bright.
+
+    Class 0 is a dark image (every pixel near 0.1), class 1 is a bright image
+    (every pixel near 0.9), plus iid Gaussian noise of scale ``noise_scale``.  With
+    the default scale the two classes are 0.8 / 0.05 = 16 standard deviations apart
+    *per pixel*, so the task is trivially separable -- but because the noise is
+    nonzero every row is distinct, and per-pixel variance is never exactly zero.
+
+    Args:
+        data_dir: Output directory.
+        num_points: Number of samples.  Labels alternate, so this is exactly balanced.
+        image_size: Width/height of the square image (default 8, giving seq_len 64).
+        noise_scale: Standard deviation of the iid pixel noise.  Set to 0 for
+            perfectly constant images (only two distinct rows in the whole dataset).
+        seed: Random seed (drives the noise only; the labels are deterministic).
+    """
+    rng = np.random.default_rng(seed)
+    seq_length = image_size * image_size
+
+    labels = np.arange(num_points) % 2                    # exactly balanced, 0,1,0,1,...
+    level = np.where(labels == 1, 0.9, 0.1)               # (num_points,) mean pixel level
+    noise = noise_scale * rng.standard_normal((num_points, seq_length))
+    features = np.clip(level[:, None] + noise, 0.0, 1.0).astype(np.float32)
+
+    _lra_save_classification_data(
+        data_dir,
+        "lra_toy_bw",
+        features,
+        labels,
+        num_classes=2,
+        additional_info={
+            "data_family": "LRA",
+            "lra_task": "toy_bw",
+            "is_sequence": True,
+            "default_step_size": 1,
+            "sequence_length": seq_length,
+            "image_size": image_size,
+            "num_classes": 2,
+            "noise_scale": noise_scale,
             "seed": seed,
         },
     )
