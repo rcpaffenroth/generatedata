@@ -20,42 +20,69 @@ from generatedata.lra_generators import (
     generate_lra_pathfinder,
     generate_lra_pathx,
 )
-from generatedata.whest_generators import WHEST_MC_SAMPLES, generate_whest
+from generatedata.whest_generators import (
+    WHEST_ARRAYS,
+    WHEST_CORE_SPEC,
+    generate_whest_dataset,
+    whest_array_path,
+    whest_expected_params,
+    whest_name,
+)
 import mnist1d
 
 
+def dataset_data_files(data_dir: Path, name: str, info: dict) -> list[Path]:
+    """The data files a dataset must have, which depends on how it is stored.
+
+    Nearly every dataset is a flat start/target parquet pair.  The whest family
+    stores plain ``.npy`` arrays instead (``storage: "npy"``), because a row of it
+    holds a whole weight tensor and one scalar parquet column per weight is not a
+    viable layout — see ``whest_generators``.
+
+    Args:
+        data_dir: Path to the processed data directory.
+        name: Dataset name.
+        info: The dataset's metadata.
+    Returns:
+        Paths that must all exist for the dataset to be loadable.
+    """
+    if info.get('storage') == 'npy':
+        return [whest_array_path(data_dir, name, array) for array in WHEST_ARRAYS]
+    return [data_dir / f'{name}_start.parquet', data_dir / f'{name}_target.parquet']
+
 def dataset_exists(data_dir: Path, name: str, expected_params: dict | None = None) -> bool:
     """Check if a dataset already exists in the processed directory.
-    
-    To avoid using stale data, this checks that the data files exist AND 
+
+    To avoid using stale data, this checks that the data files exist AND
     that the saved parameters in the JSON file match the expected parameters.
-    
+
     Args:
         data_dir: Path to the processed data directory.
         name: Dataset name.
         expected_params: Optional dictionary of parameters that must match the saved info.
     Returns:
-        True if both start and target parquet files exist, the info.json exists,
-        and (if provided) the parameters match.
+        True if the info.json exists and is readable, the data files it implies all
+        exist, and (if provided) the parameters match.
     """
-    start_exists = (data_dir / f'{name}_start.parquet').exists()
-    target_exists = (data_dir / f'{name}_target.parquet').exists()
-    info_exists = (data_dir / f'{name}_info.json').exists()
-    
-    if not (start_exists and target_exists and info_exists):
+    info_path = data_dir / f'{name}_info.json'
+    if not info_path.exists():
         return False
-        
+
+    try:
+        with open(info_path, 'r') as f:
+            saved_info = json.load(f)
+    except (json.JSONDecodeError, IOError):
+        return False
+
+    if not all(path.exists() for path in dataset_data_files(data_dir, name, saved_info)):
+        return False
+
     # If we expect specific parameters, check that they match what was saved
     if expected_params is not None:
-        try:
-            with open(data_dir / f'{name}_info.json', 'r') as f:
-                saved_info = json.load(f)
-            for key, value in expected_params.items():
-                if saved_info.get(key) != value:
-                    return False
-        except (json.JSONDecodeError, IOError):
-            return False
-            
+        for key, value in expected_params.items():
+            if saved_info.get(key) != value:
+                return False
+
     return True
 
 def compile_info_json(data_dir: Path) -> None:
@@ -75,20 +102,20 @@ def compile_info_json(data_dir: Path) -> None:
     for info_file in data_dir.glob('*_info.json'):
         # Extract the dataset name from the filename (e.g., 'circle_info.json' -> 'circle')
         name = info_file.name.replace('_info.json', '')
-        
+
+        try:
+            with open(info_file, 'r') as f:
+                info = json.load(f)
+        except (json.JSONDecodeError, IOError):
+            print(f"Warning: Could not read {info_file.name}")
+            continue
+
         # Verify that the actual data files exist before adding to the compiled info
-        start_exists = (data_dir / f'{name}_start.parquet').exists()
-        target_exists = (data_dir / f'{name}_target.parquet').exists()
-        
-        if start_exists and target_exists:
-            try:
-                with open(info_file, 'r') as f:
-                    compiled_info[name] = json.load(f)
-            except (json.JSONDecodeError, IOError):
-                print(f"Warning: Could not read {info_file.name}")
+        if all(path.exists() for path in dataset_data_files(data_dir, name, info)):
+            compiled_info[name] = info
         else:
-            print(f"Warning: Found {info_file.name} but missing parquet files for {name}. Skipping.")
-            
+            print(f"Warning: Found {info_file.name} but missing data files for {name}. Skipping.")
+
     # Save the compiled info
     with open(data_dir / 'info.json', 'w') as f:
         json.dump(compiled_info, f, indent=4)
@@ -479,11 +506,15 @@ def generate_all(data_dir: Path, all: bool) -> None:
         ('lra_pathx',      lambda: generate_lra_pathx(data_dir),      {'num_points': 2000}),
         ('lra_image',      lambda: generate_lra_image(data_dir),      {'num_points': 10000}),
         ('lra_text',       lambda: generate_lra_text(data_dir),       {'num_points': 10000}),
-        # ARC White-Box Estimation Challenge: predict a ReLU MLP's final-layer
-        # mean activation from its weights.  Wider/deeper geometries are in the
-        # all=True sweep below, since flatten(W) grows as depth*width^2.
-        ('whest_w8_d8',    lambda: generate_whest(data_dir, width=8, depth=8),
-         {'num_points': 10000, 'width': 8, 'depth': 8, 'mc_samples': WHEST_MC_SAMPLES}),
+        # ARC White-Box Estimation Challenge: predict a ReLU MLP's layer mean
+        # activations from its weights.  Only the cheapest rung is built here.  The
+        # rest of the ladder -- wider and deeper geometries, and the officially
+        # published competition data -- is opt-in through
+        # whest_generators.generate_whest_all, because it wants a GPU, downloads
+        # about a gigabyte, and writes hundreds of megabytes.
+        (whest_name(WHEST_CORE_SPEC['width'], WHEST_CORE_SPEC['depth']),
+         lambda: generate_whest_dataset(data_dir, WHEST_CORE_SPEC),
+         whest_expected_params(WHEST_CORE_SPEC)),
     ]
 
     for name, generator, expected_params in data_sets:
@@ -491,23 +522,6 @@ def generate_all(data_dir: Path, all: bool) -> None:
             print(f'Skipping {name} (already exists)')
         else:
             generator()
-
-    # Wider / deeper whest geometries, for width- and depth-scaling studies.  Only
-    # in the full sweep: flatten(W) has depth*width^2 columns, so these rows are
-    # 8-16x larger than the core whest_w8_d8.
-    if all:
-        whest_geometries = [(16, 16, 2000), (32, 8, 2000)]
-    else:
-        whest_geometries = []
-    for width, depth, num_points in whest_geometries:
-        name = f'whest_w{width}_d{depth}'
-        expected_params = {'num_points': num_points, 'width': width, 'depth': depth,
-                           'mc_samples': WHEST_MC_SAMPLES}
-        if dataset_exists(data_dir, name, expected_params):
-            print(f'Skipping {name} (already exists)')
-        else:
-            print(f'whest width={width} depth={depth}')
-            generate_whest(data_dir, width=width, depth=depth, num_points=num_points)
 
     if all:
         l1_range = np.arange(0.5, 1.51, 0.5)

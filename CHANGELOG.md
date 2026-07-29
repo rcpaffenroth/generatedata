@@ -1,6 +1,24 @@
 ## [v0.4.4] - 2026-07-28
 
 ### Added
+- `notebooks/5-rcp-whest-visualization.ipynb` (with a `tests/` copy, so nbmake runs it)
+  — loads everything with `local=True`, since these datasets are not in the remote
+  snapshot, and adapts to whichever of them are present rather than assuming the full
+  ladder.  It re-derives `F(W)` from the stored weights to confirm the `z @ W`
+  convention (z-scores standard normal over the live coordinates; the transposed
+  convention is wrong by O(1)), then plots the heavy tail of `F`, the ReLU cone
+  collapsing with depth, width scaling at fixed depth, and the residual structure of
+  the cheap baseline — including that its error on dead coordinates is exactly zero
+- `load_data.dataset_info(name, local=..., data_dir=...)` — public access to a
+  dataset's metadata without loading its data.  Previously `load_data` was the only
+  way to obtain it, which does not work for a family whose loader refuses the flat
+  DataFrame path and whose arrays are hundreds of megabytes
+- `README_whest.md` — standalone reference for this family: the competition
+  conventions and the evidence for them, how each rung's size and network count were
+  derived, per-rung label noise and baseline errors, the deadness structure that
+  shapes the ladder, usage and training examples (all of which are run and verified),
+  attribution for the official data, and the metadata schema.  `README.md` keeps a
+  summary table and links to it, so the details live in one place
 - `generatedata/whest_generators.py` — datasets for the ARC White-Box Estimation
   Challenge 2026: predict a deep ReLU MLP's final-layer mean activation
   `F(W) = E_{x~N(0,I)}[relu-chain(x)]` from its weights alone.  One row per random
@@ -8,11 +26,59 @@
   final-layer means.  `generate_whest(data_dir, width, depth, num_points,
   mc_samples, seed)` is the entry point; `he_weights`, `mc_final_mean`, and
   `ut_fixed_final_mean` are usable independently
-- `whest_w8_d8` added to the core dataset set (10,000 networks, 512 features + 8
-  labels, ~60 MB).  `all=True` additionally generates `whest_w16_d16` and
-  `whest_w32_d8` (2,000 networks each); those are gated because `flatten(W)` has
-  `depth × width²` columns.  The competition's own geometry (width 256, depth 32)
-  would need 2,097,152 columns per row and is out of scope for the flat format
+- A **new storage backend** for this family: plain `.npy` arrays (`storage: "npy"` in
+  the metadata) rather than a flat start/target parquet pair, holding the weight
+  tensor, the per-layer mean stack, the final-layer means and the cheap `UT_fixed`
+  baseline.  One scalar parquet column per weight is not a viable layout: parquet
+  costs ~570 bytes per column regardless of row count
+  (`file_bytes ≈ columns × (4…5 × num_points + 570)`), so a 100 MB file is exhausted
+  by ~175,000 columns with *zero* rows, and past ~262,000 columns pyarrow writes a
+  file it can no longer read back (`TProtocolException: Exceeded size limit` while
+  deserialising the schema).  Compression is no escape — He weights are
+  maximum-entropy for their variance, and byte-shuffle + LZMA reaches only 0.845×.
+  Local arrays are memory-mapped, so a 471 MB dataset costs no RAM until rows are
+  touched, and each array is written to a `.partial` file and renamed only on
+  success so an interrupted write cannot leave a truncated file that
+  `dataset_exists` accepts as present
+- **The whest family is reachable only through `load_data_as_sequence`.**  `load_data`
+  and `load_data_as_xy` raise a `ValueError` naming the function to use instead.
+  That is the honest access path: the forward pass is an *ordered* product of
+  operators, so the layer axis is a sequence axis and not an exchangeable feature
+  axis.  With `default_step_size = width**2` the loader returns
+  `(num_points, depth, width**2)` — one weight matrix per timestep, in layer order
+- `load_data_as_sequence` gained a `part` argument — `"target"` (the ground truth),
+  `"start"` (the cheap `UT_fixed(W)` estimate, so `target - start` is the residual a
+  corrector must learn) or `"all_layers"` (the per-layer mean stack, which only the
+  whest family provides).  It applies to flat datasets too, where `"start"` and
+  `"target"` select the corresponding parquet block
+- `load_data_as_sequence`'s `label_every_step` now defaults to `None`, resolved from
+  the dataset's new `label_every_step_allowed` metadata; passing `True` where it is
+  disallowed raises.  For the whest family broadcasting the labels onto every
+  timestep of the features would hand a model the very quantity it must predict: the
+  estimator contract passes only `width`, `depth`, `weights`, `seed` and `name` — no
+  means of any kind — and having the per-layer means as inputs would collapse 32
+  layers of error compounding into one.  Every existing dataset resolves `None` to
+  `True`, so their behaviour is unchanged
+- **The officially published competition data** is now ingestible:
+  `generate_whest_official` carves row ranges out of
+  `aicrowd/arc-whestbench-public-2026` (CC-BY-4.0, pinned to commit hashes), whose
+  labels are ground truth at 1e9 samples per network — a noise floor of ~5e-11 that
+  nothing bakeable locally approaches.  Attribution, the source revision and tag,
+  the row range, `mlp_id` / `mlp_seed` / `mlp_name`, and a `statistical_note` warning
+  that 11 networks is a smoke test rather than a benchmark are all recorded.  All
+  official rungs are carved from the `mini` splits with disjoint row ranges, needing
+  ~1.07 GB of download instead of the 8.6 GB `full` split
+- `WHEST_GRID` and `WHEST_XL` in `whest_generators.py` are the ladder: eight datasets
+  at ≤100 MB each and two at ≤500 MB.  Depth is held at the competition's 32 while
+  width sweeps 256→16, with a depth-8 branch to isolate depth, because depth and not
+  width is the regime variable — the fraction of exactly-zero coordinates is ~2% at
+  depth 8, ~12–18% at depth 16 and ~25–33% at depth 32, nearly independent of width
+  above width 32.  Width 8 at depth 32 is excluded as degenerate (half its
+  coordinates and 5% of whole networks dead).  Each rung's `num_points` is set by the
+  size budget via `whest_dataset_bytes`, and the tests hold the table to it
+- `dataset_exists` and `compile_info_json` learned about non-parquet storage through
+  a new `dataset_data_files` helper, so an `.npy`-backed dataset is neither
+  regenerated on every call nor silently dropped from `info.json`
 - Competition conventions are reproduced exactly: weights iid `N(0, 2/width)`
   (He init at fan-in `width`) with no biases, and the forward map `z ← relu(z @ W)`
   — `@W`, not `@W.T`.  Ground-truth sums are accumulated in float64 with TF32
@@ -25,13 +91,17 @@
   random rotations — so `target − start` is the deterministic residual
   `R(W) = F(W) − UT_fixed(W)`
 - whest metadata records `mc_samples`, the measured label noise `label_mc_se2`, the
-  cheap estimator's error `ut_final_layer_mse`, `dead_fraction` (networks with
-  `F ≡ 0`), `weight_std`, `forward_convention`, and `flatten_order`
-- whest datasets record `default_step_size = width**2`, so `load_data_as_sequence`
-  returns `(num_points, depth, width**2)` — one weight matrix per timestep in layer
-  order — with no change to `load_data.py`.  They deliberately do *not* set
-  `is_sequence`, since their rows are not padded and the flat X/Y view is
-  legitimate
+  cheap estimator's error `ut_final_layer_mse`, `dead_coordinate_fraction` and
+  `dead_network_fraction`, `forward_convention`, and `flatten_order`
+- Only `whest_w8_d8` is built by `generate_all`; the rest of the ladder is opt-in
+  through `generate_whest_all(data_dir, include_xl=False)`, or
+  `scripts/generatedata_local.py --whest` / `--whest-xl`.  `generate_all`'s signature
+  is unchanged, so `tests/conftest.py` and any external caller are untouched, and
+  `--all` remains CPU-only and self-contained.  The core rung stays in the default
+  set deliberately: it keeps the `.npy` path and its loader guards under test on
+  every run.  It also keeps the smaller Monte-Carlo budget (2¹⁸ draws, ~20 s on a
+  GPU and ~10 min CPU-only) that a session fixture can afford, where the gated rungs
+  use 2²⁴
 
 ## [v0.4.3] - 2026-07-27
 
