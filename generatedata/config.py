@@ -30,4 +30,4 @@ BACKEND = os.environ.get("GENERATEDATA_BACKEND", "http")
 # are rewritten in place by scripts/huggingface_upload.sh, which also pushes a
 # date-stamped tag naming the same commit for humans reading the repo history.
 HF_REPO_ID = 'rcpaffenroth/generatedata'
-HF_REVISION = '1c4104227253a96fdf62aec9ef2e0ad7a0ef3a9d'  # tag v20260811_145759
+HF_REVISION = '251469953ae7e6cc50dccd9b9e952c5c2fc35426'  # tag v20260811_170337
