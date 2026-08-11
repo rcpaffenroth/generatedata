@@ -25,6 +25,7 @@ dependencies = [
     "ipympl>=0.9,<1",
     "jupyterlab>=4.3,<5",
     "scikit-learn>=1.6,<2",
+    "huggingface-hub[cli]>=1.27.0",
 ]
 
 [dependency-groups]

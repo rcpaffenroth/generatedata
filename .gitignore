@@ -1,5 +1,6 @@
 data/
 gpt_tmp/
+do_not_commit/
 
 # The virtual environment
 venv*/
