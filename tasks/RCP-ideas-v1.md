@@ -1,12 +1,24 @@
-The feature/lra_branch did not work out as I hoped.  It think the key issue is that load_data_as sequence is overly complicated.  The idea is the the info json file should have the same format as before, but that seq_len can just be computed from the data size and step_size can just be part of the input to load_data_as_sequence.  This way we can keep the same info json file format, and just change the way we call load_data_as_sequence.
+I want to transition to having huggingface be the storage 
+backend for these datasets, and at the moment the preferred 
+backend is a web page for downloading these datasets.
 
-Implications of this are that save_data, and all functions that call that, can stay the same, and now special datasets need to be created for the LRA tasks.  We can just call load_data_as_sequence with a given step_size for the LRA tasks.  This should make things much simpler and easier to maintain.
+Please examine the current code base to understand the 
+current state of affairs.  However, things I suspect you will need to look at include
 
-Also, the tests in the feature/lra_branch are seem to miss the point, and many of them
-seem useless.  Make the tests in the feature/lra_branch_v2 more focused on testing the functionality of load_data_as_sequence with different step_sizes and different datasets.  We can have a few tests that check that the data is being loaded correctly and that the seq_len is being computed correctly based on the data size and step_size.  
+@generatedata/config.py - the URL at which the data is stored.  This is versioned by date.
+@generatedata/load_data.py - this contains the high level routines for loading the datasets and will likely require the most modification
+@scripts/copy_data_to_http.sh - this is script copying the generated data to the web page.  DO NOT RUN THIS SCRIPT, since I do not want to create a new web page as part of this exercise. However, you can look at this to see how things are done now.
 
-Finally, the notebook for the LRA tasks (4-rcp-timeseries-datasets.ipynb) can more general and just needs to call load_data_as_sequence with the appropriate parameters and use any already existing datasets.  Also, including MNIST1D and a seperate example from MNIST is really annoying and not really necessary.  The notebook should just allow the use to pick any dataset and specify the step_size for that dataset.  Now, I really like section 7 (the visualization section) and the way it allows the user to build the data timestep by timestep.  I also like section 8 (the training section) and the way it allows the user to train a model on the data.  I think we should keep those sections, but just make them more general so that they can work with any dataset and any step_size.  This way we can have a single notebook that can be used for all of the LRA tasks, and we can just specify the dataset and step_size as needed.
+Also, for your reference, this directory already has installed
+the hf cli tool which can be run using
 
-In the current directory are two checkouts of the code.  The first is the feature/lra_branch which has the original implementation of the LRA tasks, and the second is the feature/lra_branch_v2 into which the implementation of what I just described should be placed.
+uv run hf
 
-In the feature/lra_branch_v2/tasks place markdown files for implementing the above described changes.  The markdown files should be named in the format of "000_task_name.md" and should contain the steps needed to implement the changes for that task and 000 replaced with order in which the tasks should be implemented.
+In addition, my hf token can be found in @do_not_commit/huggingface_token and you can authenticate using something like
+
+export HF_TOKE=$(cat do_not_commit/huggingface_token) 
+
+Now, the task at hand is to update the code to support a huggingface dataset repo as its storage backend, but to have the frtonend be the same.
+
+/grill-me
+
