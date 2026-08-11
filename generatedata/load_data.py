@@ -1,16 +1,14 @@
 import pandas as pd
-import pathlib
 from pathlib import Path
-import generatedata
-import io
 import json
-import requests
-import generatedata.config
 import random
 import warnings
 import numpy as np
 
-DATA_URL = generatedata.config.DATA_URL
+# Where the files come from -- a local directory, the Hub, or a web page -- is
+# entirely `backend`'s business.  It hands back a local path; everything below
+# just reads paths, and so contains no local-vs-remote branch anywhere.
+from generatedata.backend import fetch
 
 # Which array holds the labels for each `part` of a dataset stored as .npy.
 _NPY_LABEL_ARRAYS = {
@@ -20,21 +18,14 @@ _NPY_LABEL_ARRAYS = {
 }
 
 
-def _resolve_data_dir(data_dir: Path | str | None) -> Path:
-    """The local processed-data directory, defaulting to the one in the package."""
-    if data_dir is not None:
-        return pathlib.Path(data_dir)
-    base_dir = pathlib.Path(generatedata.__path__[0])
-    return base_dir / "../data/processed"
+def _all_info(local: bool, data_dir: Path | str | None) -> dict:
+    """The whole ``info.json`` index: dataset name -> metadata dict."""
+    return json.loads(fetch("info.json", local, data_dir).read_text())
 
 
 def _dataset_info(name: str, local: bool, data_dir: Path | str | None) -> dict:
     """Metadata for one dataset, read without touching its (possibly huge) data."""
-    if local:
-        with open(_resolve_data_dir(data_dir) / "info.json", "r") as f:
-            all_info = json.load(f)
-    else:
-        all_info = requests.get(DATA_URL + "/info.json").json()
+    all_info = _all_info(local, data_dir)
     if name not in all_info:
         raise ValueError(
             f"Unknown dataset '{name}'. Available datasets: {list(all_info.keys())}"
@@ -47,16 +38,12 @@ def _load_npy_array(
 ) -> np.ndarray:
     """Load one ``.npy`` array of a dataset stored that way.
 
-    Local files are memory-mapped, so a dataset of hundreds of megabytes costs no
-    RAM until rows are actually touched.  Call ``np.asarray`` on the result if you
-    want it resident.
+    The file is memory-mapped, so a dataset of hundreds of megabytes costs no RAM
+    until rows are actually touched.  Call ``np.asarray`` on the result if you
+    want it resident.  This holds for remote datasets too, because every backend
+    puts the bytes on local disk before returning.
     """
-    filename = f"{name}_{array}.npy"
-    if local:
-        return np.load(_resolve_data_dir(data_dir) / filename, mmap_mode="r")
-    response = requests.get(f"{DATA_URL}/{filename}")
-    response.raise_for_status()
-    return np.load(io.BytesIO(response.content))
+    return np.load(fetch(f"{name}_{array}.npy", local, data_dir), mmap_mode="r")
 
 
 def data_names(local: bool = False, data_dir: Path | str | None = None) -> list[str]:
@@ -70,14 +57,7 @@ def data_names(local: bool = False, data_dir: Path | str | None = None) -> list[
     Returns:
         list: the names of the datasets
     """
-    if local:
-        with open(_resolve_data_dir(data_dir) / "info.json", "r") as f:
-            data_info = json.load(f)
-    else:
-        # Read the info json file from the URL DATA_URL+'/info.json'
-        response = requests.get(DATA_URL + "/info.json")
-        data_info = response.json()
-    return list(data_info.keys())
+    return list(_all_info(local, data_dir).keys())
 
 
 def dataset_info(name: str, local: bool = False, data_dir: Path | str | None = None) -> dict:
@@ -145,17 +125,8 @@ def load_data(name: str, local: bool = False, data_dir: Path | str | None = None
             f"load_data_as_sequence('{name}', local=True) instead."
         )
 
-    if local:
-        data_dir = _resolve_data_dir(data_dir)
-        # Read the start data
-        z_start = pd.read_parquet(data_dir / f"{name}_start.parquet")
-        # Read the target data
-        z_target = pd.read_parquet(data_dir / f"{name}_target.parquet")
-    else:
-        # Read the start data
-        z_start = pd.read_parquet(DATA_URL + f"/{name}_start.parquet")
-        # Read the target data
-        z_target = pd.read_parquet(DATA_URL + f"/{name}_target.parquet")
+    z_start = pd.read_parquet(fetch(f"{name}_start.parquet", local, data_dir))
+    z_target = pd.read_parquet(fetch(f"{name}_target.parquet", local, data_dir))
 
     return {"info": data_info, "start": z_start, "target": z_target}
 

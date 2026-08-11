@@ -255,16 +255,43 @@ The library supports both local and remote data loading:
 # Load from local files (requires local data generation)
 data = load_data.load_data('MNIST', local=True)
 
-# Load from remote URL (default)
+# Load from a remote snapshot (default)
 data = load_data.load_data('MNIST', local=False)
 ```
 
-The remote snapshot at `config.DATA_URL` predates the LRA generators and holds
-the full `all=True` sweep (334 datasets: the core sets plus the EMNIST,
-FashionMNIST, MNIST custom, and MNIST1D custom families). It does not yet
-contain the `lra_*` datasets, the `whest_*` datasets, or the KMNIST family, so
-those must be generated locally and loaded with `local=True`. Requesting an
-unavailable name raises `ValueError` listing what is available.
+### Storage backends
+
+Remote data comes from one of two places, chosen by the `GENERATEDATA_BACKEND`
+environment variable. The API is identical either way — no function takes a
+backend argument, and neither backend requires an account or a token.
+
+```bash
+uv run pytest                              # http: the WPI web page (default)
+GENERATEDATA_BACKEND=hf uv run pytest      # hf:   the HuggingFace Hub
+```
+
+| | `http` (default) | `hf` |
+| --- | --- | --- |
+| location | `config.DATA_URL`, a date-stamped directory | [`rcpaffenroth/generatedata`](https://huggingface.co/datasets/rcpaffenroth/generatedata), pinned to `config.HF_REVISION` |
+| datasets | 422 — the full `all=True` sweep | 27 — whatever was last uploaded from `data/processed/` |
+| `whest_*` (`.npy`) | absent | present |
+| `lra_*`, KMNIST | absent | present |
+
+The Hub is where this is heading; HTTP is the default until the Hub repo holds
+the full sweep. **The two are not the same collection** — only 17 datasets are
+common to both — so `data_names()` returns a different list depending on the
+backend. Requesting an unavailable name raises `ValueError` listing what is
+available.
+
+Both snapshots are content-immutable (a commit hash and a date-stamped directory
+each promise their bytes never change), so files are cached on local disk after
+the first fetch — the Hub under `~/.cache/huggingface`, the web page under
+`~/.cache/generatedata`. That is also why remote `.npy` datasets are
+memory-mapped: a 91 MB whest weight array costs no RAM until rows are touched.
+
+Note that the generators are **not seeded**, so regenerating a dataset produces
+different numbers than any existing snapshot. Snapshots are reproducible; the
+generators are not.
 
 ## Custom Dataset Transforms
 
@@ -307,6 +334,7 @@ All datasets follow a consistent format:
 generatedata/
 ├── generatedata/           # Main library code
 │   ├── load_data.py       # Data loading (flat, X/Y, sequence)
+│   ├── backend.py         # Where files live: local dir, HF Hub, or web page
 │   ├── save_data.py       # Data saving utilities
 │   ├── data_generators.py # Core dataset generators + transforms
 │   ├── lra_generators.py  # Long Range Arena (LRA) benchmark generators
@@ -410,16 +438,36 @@ generate_whest_official(Path('data/processed/'), key='phase1', num_points=11)
 
 That module also exposes the pieces on their own — `he_weights` (draw competition-faithful networks), `mc_layer_means` (the Monte-Carlo ground truth for every layer, returning the means and their second moments so the labels' own standard error is available), `ut_fixed_final_mean` (the cheap deterministic estimate), and `whest_dataset_bytes` (the exact size of a geometry, which is what fixes each rung's `num_points`).
 
-#### Copying Data to HTTP-Served Directory
+#### Publishing Data to the HuggingFace Hub
 
-To make generated data available via HTTP (e.g., for remote loading), use:
+To publish everything in `data/processed/` as a new snapshot:
+
+```bash
+./scripts/huggingface_upload.sh
+```
+
+It takes no arguments and works from any directory. It creates the dataset repo
+if needed, uploads the dataset card and `data/processed/`, pushes a date-stamped
+tag, and rewrites the `HF_REVISION` line of `generatedata/config.py` with the
+resulting commit hash. Writing needs a token, read from `$HF_TOKEN` or
+`do_not_commit/huggingface_token`; reading never does.
+
+Re-run it freely — `hf upload` hashes each file and skips unchanged ones, so
+uploading a few datasets today and the full `generate_all(..., all=True)` sweep
+later is the same command twice. The upload is **additive**: files on the Hub
+with no local counterpart are left alone, so a half-generated `data/processed/`
+can never delete a published dataset.
+
+#### Copying Data to HTTP-Served Directory (deprecated)
+
+The original backend, kept until the Hub repo reaches parity:
 
 ```bash
 cd scripts
 ./copy_data_to_http.sh
 ```
 
-The script takes no arguments and is specific to the author's WPI hosting setup. It mounts the HTTP directory with `rcp drive mount -d html`, copies everything in `data/processed/` into a new timestamped directory under `~/mnt/html/public_html/data/generatedata/`, and then **rewrites `generatedata/config.py`** so that `DATA_URL` points at the new snapshot. It uses paths relative to `scripts/`, so run it from that directory.
+The script takes no arguments and is specific to the author's WPI hosting setup. It mounts the HTTP directory with `rcp drive mount -d html`, copies everything in `data/processed/` into a new timestamped directory under `~/mnt/html/public_html/data/generatedata/`, and then rewrites the `DATA_URL` line of `generatedata/config.py` so that it points at the new snapshot. It uses paths relative to `scripts/`, so run it from that directory.
 
 ### Example Notebooks
 

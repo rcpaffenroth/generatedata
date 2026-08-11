@@ -1,3 +1,62 @@
+## [v0.5.0] - 2026-08-11
+
+### Added
+- **HuggingFace Hub as a storage backend**, at
+  [`rcpaffenroth/generatedata`](https://huggingface.co/datasets/rcpaffenroth/generatedata)
+  (public — no account or token needed to read).  Select it with the
+  `GENERATEDATA_BACKEND` environment variable:
+
+  ```bash
+  GENERATEDATA_BACKEND=hf uv run pytest      # the Hub
+  uv run pytest                              # the WPI web page (still the default)
+  ```
+
+  The public API is unchanged: `load_data`, `data_names`, `load_data_as_xy`,
+  `load_data_as_sequence` and friends take no new arguments.  HTTP remains the
+  default while the Hub backend is evaluated.
+- `generatedata/backend.py` — the single place that knows where files live.  It
+  answers one question, `fetch(filename, local, data_dir) -> Path`, for all three
+  sources (local directory, Hub, web page).  Because the answer is always a local
+  path, `load_data.py` no longer contains a single local-vs-remote branch; the
+  four `if local:` blocks it used to carry are gone.
+- `scripts/huggingface_upload.sh` — uploads `data/processed/` to the Hub, pushes a
+  date-stamped tag, and rewrites `HF_REVISION` in `config.py` to the resulting
+  commit hash.  Re-runnable and additive: `hf upload` skips unchanged files, and
+  files on the Hub with no local counterpart are never deleted, so a
+  half-generated `data/processed/` cannot destroy a published dataset.
+- `scripts/hf_dataset_card.md` — the Hub repo's README, kept under version
+  control here because `data/processed/` is generated and gitignored.
+- `tests/test_backend.py` — checks the migration's actual claim by hashing bytes:
+  what the Hub serves is what is in `data/processed`.
+
+### Changed
+- Remote `.npy` datasets are now **memory-mapped**.  They previously arrived
+  through `io.BytesIO` and were fully resident, so a 91 MB whest weight array cost
+  91 MB of RAM and was re-downloaded on *every* call; remote and local loading had
+  genuinely different memory behavior.  Both remote backends now cache to disk
+  first, so `mmap_mode="r"` applies everywhere and the download happens once.
+  Caching is sound because both remotes are content-immutable: a commit hash and a
+  date-stamped directory each promise the bytes behind them never change.
+- `config.py` now holds `DATA_URL`, `BACKEND`, `HF_REPO_ID` and `HF_REVISION`,
+  with the HTTP half marked as a deletable block.
+- `scripts/copy_data_to_http.sh` rewrites only the `DATA_URL` line instead of
+  overwriting `config.py` wholesale, which would now destroy the HuggingFace pin.
+
+### Notes
+- The two remote backends do **not** hold the same collection.  The WPI snapshot
+  has 422 datasets — the full `all=True` MNIST/EMNIST/KMNIST/FashionMNIST/MNIST1D
+  sweeps — but no `.npy` files at all; the Hub repo currently has the 27 datasets
+  in `data/processed`, including the whest families the web page never carried.
+  Only 17 are common to both.  Parity comes from running
+  `generate_all(data_dir, all=True)` and re-running the upload script.
+- The generators are **not reproducible across runs**: `generate_circle` and its
+  neighbours call `np.random.uniform` with no seed, and `seed` appears once in all
+  of `data_generators.py`.  Verified by hashing: `circle_start.parquet`,
+  `circle_target.parquet` and `MNIST_start.parquet` from the Hub match
+  `data/processed` exactly and differ from the WPI snapshot entirely.  So
+  regenerating the sweeps will produce different bytes than the July snapshot, and
+  cross-snapshot value equality is not a property the storage layer can supply.
+
 ## [v0.4.4] - 2026-07-28
 
 ### Fixed
